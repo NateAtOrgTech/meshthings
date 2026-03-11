@@ -2,15 +2,22 @@ import { MeshDevice, Protobuf, Types } from "@meshtastic/core";
 import { TransportNodeSerial } from "@meshtastic/transport-node-serial";
 
 type Command = {
-  command: string;
-  function: Function;
+  commandStrings: string | string[];
+  commandFunction: Function;
 };
 
 type CommandMap = Command[];
 
+type InternalCommand = {
+  commandStrings: string[];
+  commandFunction: Function;
+};
+
+type InternalCommandMap = InternalCommand[];
+
 let meshDevice: MeshDevice;
 let myNodeInfo: Protobuf.Mesh.MyNodeInfo = undefined;
-let commands: CommandMap;
+let internalCommands: InternalCommandMap = {} as InternalCommandMap;
 
 async function configureDevice(deviceString: string) {
   const transport = await TransportNodeSerial.create(deviceString).catch((error) => {
@@ -34,7 +41,15 @@ async function configureDevice(deviceString: string) {
 }
 
 async function configureCommands(commandMap: CommandMap) {
-  commands = commandMap;
+  //commands = commandMap;
+
+  commandMap.forEach((command) => {
+    if (typeof command.commandStrings === "string") {
+      internalCommands.concat({ commandStrings: [command.commandStrings], commandFunction: command.commandFunction });
+    } else {
+      internalCommands.concat(command as InternalCommand);
+    }
+  });
 
   meshDevice.events.onMessagePacket.subscribe(async (messagePacket: Types.PacketMetadata<string>) => {
     // Filter messages we don't respond to
@@ -45,16 +60,18 @@ async function configureCommands(commandMap: CommandMap) {
     const tokens = messagePacket.split();
     let result = undefined;
 
-    commandMap.forEach(async (command) => {
-      if (command.command === tokens[0]) {
-        result = command.function(tokens);
+    internalCommands.forEach(async (command) => {
+      command.commandStrings.forEach(async (commandString) => {
+        if (commandString === tokens[0]) {
+          result = command.commandFunction(tokens);
 
-        // Parse the command and get the destination
-        // Send to the right command in the command map to collect the response
-        await meshDevice.sendText(result, messagePacket.from, true, messagePacket.channel).catch((error) => {
-          console.error(error);
-        });
-      }
+          // Parse the command and get the destination
+          // Send to the right command in the command map to collect the response
+          await meshDevice.sendText(result, messagePacket.from, true, messagePacket.channel).catch((error) => {
+            console.error(error);
+          });
+        }
+      });
     });
   });
   console.log("Event registration complete");
