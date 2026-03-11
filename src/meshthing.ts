@@ -1,6 +1,9 @@
 import { MeshDevice, Protobuf, Types } from "@meshtastic/core";
 import { TransportNodeSerial } from "@meshtastic/transport-node-serial";
 
+// TODO: This works until the device goes to sleep, need to understand how to
+//.      keep me registered or reregister during the right lifecycle
+
 type Command = {
   commandStrings: string | string[];
   commandFunction: Function;
@@ -41,8 +44,6 @@ async function configureDevice(deviceString: string) {
 }
 
 async function configureCommands(commandMap: CommandMap) {
-  //commands = commandMap;
-
   commandMap.forEach((command) => {
     if (typeof command.commandStrings === "string") {
       internalCommands.concat({ commandStrings: [command.commandStrings], commandFunction: command.commandFunction });
