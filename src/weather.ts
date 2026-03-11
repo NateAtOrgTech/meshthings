@@ -30,6 +30,6 @@ cron.schedule(process.env.WEATHER_UPDATE_CRON || "", () => {
   data.lastUpdated = Date.now();
 });
 
-const commandMap: CommandMap = [{ command: "temperature", function: temperature }];
+const commandMap: CommandMap = [{ commandStrings: ["temperature", "temp"], commandFunction: temperature }];
 
 export { commandMap, getWeather };
