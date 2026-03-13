@@ -5,7 +5,7 @@ import { configure } from "./meshthing";
 import { commandMap, getWeather } from "./weather";
 
 // Setup meshtastic device
-const device = await configure(process.env.SERIAL_DEVICE || "", commandMap);
+// const device = await configure(process.env.SERIAL_DEVICE || "", commandMap);
 
 // Start the server
 const app = express();
