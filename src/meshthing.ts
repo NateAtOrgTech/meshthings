@@ -1,8 +1,7 @@
 import { MeshDevice, Protobuf, Types } from "@meshtastic/core";
 import { TransportNodeSerial } from "@meshtastic/transport-node-serial";
 
-// TODO: This works until the device goes to sleep, need to understand how to
-//.      keep me registered or reregister during the right lifecycle
+const HEARTBEAT_INTERVAL_S = 5 * 60 * 1000; // 5 minutes
 
 type Command = {
   commandStrings: string | string[];
@@ -37,6 +36,10 @@ async function configureDevice(deviceString: string) {
     await meshDevice.configure().catch((error) => {
       console.error(error);
     });
+
+    // If we don't set a heartbeat, serial times out after 15 minutes
+    meshDevice.setHeartbeatInterval(HEARTBEAT_INTERVAL_S);
+
     console.log("Config complete");
   } else {
     throw Error("Unable to configure device");
