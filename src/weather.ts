@@ -32,7 +32,7 @@ let data = {
 };
 
 function temperature() {
-  return Math.round((data.temperatureF * 100.0) / 100.0) + " F";
+  return data.temperatureF.toFixed(1) + "F";
 }
 
 function getWeather() {
