@@ -8,18 +8,18 @@ type Command = {
   commandFunction: Function;
 };
 
-type CommandMap = Command[];
+type CommandMap = { commands: Command[]; default: Function };
 
 type InternalCommand = {
   commandStrings: string[];
   commandFunction: Function;
 };
 
-type InternalCommandMap = InternalCommand[];
+type InternalCommandMap = { commands: InternalCommand[]; default: Function };
 
 let meshDevice: MeshDevice;
 let myNodeInfo: Protobuf.Mesh.MyNodeInfo = undefined;
-let internalCommands: InternalCommandMap = [] as InternalCommandMap;
+let internalCommands: InternalCommandMap = {} as InternalCommandMap;
 
 async function configureDevice(deviceString: string) {
   const transport = await TransportNodeSerial.create(deviceString).catch((error) => {
@@ -47,11 +47,17 @@ async function configureDevice(deviceString: string) {
 }
 
 async function configureCommands(commandMap: CommandMap) {
-  commandMap.forEach((command) => {
+  internalCommands.commands = [];
+
+  commandMap.commands.forEach((command) => {
     if (typeof command.commandStrings === "string") {
-      internalCommands.push({ commandStrings: [command.commandStrings], commandFunction: command.commandFunction });
+      internalCommands.commands.push({ commandStrings: [command.commandStrings], commandFunction: command.commandFunction });
     } else {
-      internalCommands.push(command as InternalCommand);
+      internalCommands.commands.push(command as InternalCommand);
+    }
+
+    if (commandMap.default) {
+      internalCommands.default = commandMap.default;
     }
   });
 
@@ -62,22 +68,31 @@ async function configureCommands(commandMap: CommandMap) {
     }
 
     const tokens = messagePacket.data.split(" ");
-    let result = undefined;
+    let result: string = "";
+    let handled = false;
 
-    internalCommands.forEach((command) => {
+    // Collect the result from the correct command OR
+    // use default if it exists
+    internalCommands.commands.forEach((command) => {
       command.commandStrings.forEach(async (commandString) => {
         // case insensitive
         if (commandString.toLocaleLowerCase() === tokens[0].toLocaleLowerCase()) {
           result = command.commandFunction(tokens);
 
-          // Parse the command and get the destination
-          // Send to the right command in the command map to collect the response
-          await meshDevice.sendText(result, messagePacket.from, true, messagePacket.channel).catch((error) => {
-            console.error(error);
-          });
+          handled = true;
         }
       });
     });
+    if (!handled && internalCommands.default) {
+      result = internalCommands.default(tokens);
+      handled = true;
+    }
+
+    if ((handled = true)) {
+      await meshDevice.sendText(result, messagePacket.from, true, messagePacket.channel).catch((error) => {
+        console.error(error);
+      });
+    }
   });
   console.log("Event registration complete");
 }

@@ -39,6 +39,13 @@ function getWeather() {
   return data;
 }
 
-const commandMap: CommandMap = [{ commandStrings: ["temperature", "temp", "t"], commandFunction: temperature }];
+function getHelp() {
+  return "help: t -> temperature";
+}
+
+const commandMap: CommandMap = {
+  commands: [{ commandStrings: ["temperature", "temp", "t"], commandFunction: temperature }],
+  default: getHelp,
+};
 
 export { commandMap, getWeather };
