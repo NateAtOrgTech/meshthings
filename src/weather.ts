@@ -32,7 +32,7 @@ let data = {
 };
 
 function temperature() {
-  return data.temperatureF.toFixed(1) + "F";
+  return data.temperatureC.toFixed(1) + "°C / " + data.temperatureF.toFixed(1) + "°F";
 }
 
 function getWeather() {
