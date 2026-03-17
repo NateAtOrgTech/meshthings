@@ -19,7 +19,7 @@ type InternalCommandMap = InternalCommand[];
 
 let meshDevice: MeshDevice;
 let myNodeInfo: Protobuf.Mesh.MyNodeInfo = undefined;
-let internalCommands: InternalCommandMap = {} as InternalCommandMap;
+let internalCommands: InternalCommandMap = [] as InternalCommandMap;
 
 async function configureDevice(deviceString: string) {
   const transport = await TransportNodeSerial.create(deviceString).catch((error) => {
@@ -49,9 +49,9 @@ async function configureDevice(deviceString: string) {
 async function configureCommands(commandMap: CommandMap) {
   commandMap.forEach((command) => {
     if (typeof command.commandStrings === "string") {
-      internalCommands.concat({ commandStrings: [command.commandStrings], commandFunction: command.commandFunction });
+      internalCommands.push({ commandStrings: [command.commandStrings], commandFunction: command.commandFunction });
     } else {
-      internalCommands.concat(command as InternalCommand);
+      internalCommands.push(command as InternalCommand);
     }
   });
 
@@ -61,12 +61,13 @@ async function configureCommands(commandMap: CommandMap) {
       return;
     }
 
-    const tokens = messagePacket.split();
+    const tokens = messagePacket.data.split(" ");
     let result = undefined;
 
-    internalCommands.forEach(async (command) => {
+    internalCommands.forEach((command) => {
       command.commandStrings.forEach(async (commandString) => {
-        if (commandString === tokens[0]) {
+        // case insensitive
+        if (commandString.toLocaleLowerCase() === tokens[0].toLocaleLowerCase()) {
           result = command.commandFunction(tokens);
 
           // Parse the command and get the destination

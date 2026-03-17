@@ -32,13 +32,13 @@ let data = {
 };
 
 function temperature() {
-  return data.temperatureF;
+  return Math.round((data.temperatureF * 100.0) / 100.0) + " F";
 }
 
 function getWeather() {
   return data;
 }
 
-const commandMap: CommandMap = [{ commandStrings: ["temperature", "temp"], commandFunction: temperature }];
+const commandMap: CommandMap = [{ commandStrings: ["temperature", "temp", "t"], commandFunction: temperature }];
 
 export { commandMap, getWeather };
