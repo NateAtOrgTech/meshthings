@@ -20,6 +20,7 @@ type InternalCommandMap = { commands: InternalCommand[]; default: Function };
 let meshDevice: MeshDevice;
 let myNodeInfo: Protobuf.Mesh.MyNodeInfo = undefined;
 let internalCommands: InternalCommandMap = {} as InternalCommandMap;
+let lastSent = "";
 
 async function configureDevice(deviceString: string) {
   const transport = await TransportNodeSerial.create(deviceString).catch((error) => {
@@ -89,6 +90,7 @@ async function configureCommands(commandMap: CommandMap) {
     }
 
     if ((handled = true)) {
+      lastSent = result;
       await meshDevice.sendText(result, messagePacket.from, true, messagePacket.channel).catch((error) => {
         console.error(error);
       });
@@ -97,7 +99,7 @@ async function configureCommands(commandMap: CommandMap) {
   console.log("Event registration complete");
 }
 
-async function configure(deviceString: string, commandMap: CommandMap) {
+async function configureAndListen(deviceString: string, commandMap: CommandMap) {
   await configureDevice(deviceString).catch((error) => {
     console.error(error);
   });
@@ -106,6 +108,15 @@ async function configure(deviceString: string, commandMap: CommandMap) {
   });
 }
 
+function getStats() {
+  return lastSent;
+}
+
+const meshThing = {
+  configureAndListen,
+  getStats,
+};
+
 export type { Command, CommandMap };
 
-export { configureDevice, configureCommands, configure };
+export { meshThing };

@@ -35,10 +35,6 @@ function temperature() {
   return data.temperatureC.toFixed(1) + "°C / " + data.temperatureF.toFixed(1) + "°F";
 }
 
-function getWeather() {
-  return data;
-}
-
 function getHelp() {
   return "help: t -> temperature";
 }
@@ -48,4 +44,4 @@ const commandMap: CommandMap = {
   default: getHelp,
 };
 
-export { commandMap, getWeather };
+export { commandMap };
