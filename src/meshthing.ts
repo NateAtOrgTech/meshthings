@@ -22,7 +22,7 @@ let myNodeInfo: Protobuf.Mesh.MyNodeInfo = undefined;
 let internalCommands: InternalCommandMap = {} as InternalCommandMap;
 let lastSent = "";
 
-async function configureDevice(deviceString: string) {
+async function setupDevice(deviceString: string) {
   const transport = await TransportNodeSerial.create(deviceString).catch((error) => {
     console.error(error);
   });
@@ -47,7 +47,7 @@ async function configureDevice(deviceString: string) {
   }
 }
 
-async function configureCommands(commandMap: CommandMap) {
+async function setupCommands(commandMap: CommandMap) {
   internalCommands.commands = [];
 
   commandMap.commands.forEach((command) => {
@@ -62,53 +62,56 @@ async function configureCommands(commandMap: CommandMap) {
     }
   });
 
-  meshDevice.events.onMessagePacket.subscribe(async (messagePacket: Types.PacketMetadata<string>) => {
-    // Filter messages we don't respond to
-    if (myNodeInfo.myNodeNum === messagePacket.from || myNodeInfo.myNodeNum !== messagePacket.to) {
-      return;
-    }
-
-    const tokens = messagePacket.data.split(" ");
-    let result: string = "";
-    let handled = false;
-
-    // Collect the result from the correct command OR
-    // use default if it exists
-    internalCommands.commands.forEach((command) => {
-      command.commandStrings.forEach(async (commandString) => {
-        // case insensitive
-        if (commandString.toLocaleLowerCase() === tokens[0].toLocaleLowerCase()) {
-          result = command.commandFunction(tokens);
-
-          handled = true;
-        }
-      });
-    });
-    if (!handled && internalCommands.default) {
-      result = internalCommands.default(tokens);
-      handled = true;
-    }
-
-    if ((handled = true)) {
-      lastSent = result;
-      await meshDevice.sendText(result, messagePacket.from, true, messagePacket.channel).catch((error) => {
-        console.error(error);
-      });
-    }
-  });
+  meshDevice.events.onMessagePacket.subscribe(messageHandler);
   console.log("Event registration complete");
 }
 
+async function messageHandler(messagePacket: Types.PacketMetadata<string>) {
+  // Filter messages we don't respond to
+  if (myNodeInfo.myNodeNum === messagePacket.from || myNodeInfo.myNodeNum !== messagePacket.to) {
+    return;
+  }
+
+  const tokens = messagePacket.data.split(" ");
+  let result: string = "";
+  let handled = false;
+
+  // Collect the result from the correct command OR
+  // use default if it exists
+  internalCommands.commands.forEach((command) => {
+    command.commandStrings.forEach(async (commandString) => {
+      // case insensitive
+      if (commandString.toLocaleLowerCase() === tokens[0].toLocaleLowerCase()) {
+        result = command.commandFunction(tokens);
+
+        handled = true;
+      }
+    });
+  });
+  if (!handled && internalCommands.default) {
+    result = internalCommands.default(tokens);
+    handled = true;
+  }
+
+  if ((handled = true)) {
+    lastSent = result;
+    await meshDevice.sendText(result, messagePacket.from, true, messagePacket.channel).catch((error) => {
+      console.error(error);
+    });
+  }
+}
+
 async function configureAndListen(deviceString: string, commandMap: CommandMap) {
-  await configureDevice(deviceString).catch((error) => {
+  await setupDevice(deviceString).catch((error) => {
     console.error(error);
   });
-  await configureCommands(commandMap).catch((error) => {
+  await setupCommands(commandMap).catch((error) => {
     console.error(error);
   });
 }
 
 function getStats() {
+  // TODO: A lot more value here
   return lastSent;
 }
 
