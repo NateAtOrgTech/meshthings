@@ -1,8 +1,8 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 
-import { createMeshThing, MeshThingModule, ModuleSpec } from "./meshthing";
-import { createFakeDevice } from "./testing";
+import { createMeshThing, MeshThingModule, ModuleSpec } from "../meshthing.js";
+import { createMockDevice } from "../../testing/index.js";
 
 function moduleNamed(name: string, words: string[], reply = name): MeshThingModule {
   return {
@@ -13,7 +13,7 @@ function moduleNamed(name: string, words: string[], reply = name): MeshThingModu
 }
 
 async function mount(specs: ModuleSpec[]) {
-  const fake = createFakeDevice();
+  const fake = createMockDevice();
   const thing = createMeshThing({ minSendIntervalMs: 0 });
 
   await thing.listen(fake.device, specs);

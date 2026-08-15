@@ -2,12 +2,11 @@ import { test, describe, after } from "node:test";
 import assert from "node:assert/strict";
 import dgram from "dgram";
 
-import { alertsModule } from "./alerts";
-import { openDatabase } from "./db";
-import { directoryModule } from "./directory";
-import { createMeshThing, MAX_TEXT_BYTES, MeshThing } from "./meshthing";
-import { createFakeDevice } from "./testing";
-import { weatherModule } from "./weather";
+import { alertsModule } from "../things/alerts/index.js";
+import { createMeshThing, MAX_TEXT_BYTES, MeshThing, openDatabase } from "../core/index.js";
+import { directoryModule } from "../things/directory/index.js";
+import { createMockDevice } from "../testing/index.js";
+import { weatherModule } from "../things/weather/index.js";
 
 // The deployment shape: every meshthing on one radio, one database
 const running: MeshThing[] = [];
@@ -33,7 +32,7 @@ function freePort() {
 
 async function setup() {
   const database = openDatabase(":memory:");
-  const fake = createFakeDevice();
+  const fake = createMockDevice();
   const thing = createMeshThing({ minSendIntervalMs: 0 });
 
   let emit: ((line: string) => void) | undefined;
@@ -88,10 +87,11 @@ describe("all three meshthings on one node", () => {
     assert.match(await ask("receiver"), /No weekly test seen yet/);
   });
 
-  test("lists every module in one help reply", async () => {
+  test("lists every module across the help pages", async () => {
     const { ask } = await setup();
 
-    const help = await ask("help");
+    // Three things plus the built-ins does not fit one packet, so help pages
+    const help = (await ask("help")) + "\n" + (await ask("help 2"));
 
     assert.match(help, /weather/);
     assert.match(help, /directory/);

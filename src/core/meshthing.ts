@@ -1,11 +1,10 @@
 import { MeshDevice, Protobuf, Types } from "@meshtastic/core";
 import { TransportNodeSerial } from "@meshtastic/transport-node-serial";
 
+import { byteLength, MAX_TEXT_BYTES, paginate, parsePage, truncateBytes } from "./text.js";
+
 const HEARTBEAT_INTERVAL_S = 5 * 60 * 1000; // 5 minutes
 
-// A meshtastic text payload tops out around 200 bytes. Stay under it with room
-// for the radio's own overhead.
-const MAX_TEXT_BYTES = 180;
 // Airtime is shared by everyone on the channel. Spacing transmissions keeps a
 // fan-out to many subscribers from jamming the mesh at the worst moment.
 const MIN_SEND_INTERVAL_MS = 4000;
@@ -32,11 +31,6 @@ type CommandHandler = (args: string[], context: CommandContext) => string | void
 type Command = {
   commandStrings: string | string[];
   commandFunction: CommandHandler;
-};
-
-type CommandMap = {
-  commands: Command[];
-  default?: CommandHandler;
 };
 
 // What a module is handed when it starts. It gets the outbound API so it can
@@ -116,76 +110,8 @@ type QueueItem = {
   options: SendOptions;
 };
 
-function byteLength(text: string) {
-  return Buffer.byteLength(text, "utf8");
-}
-
-const ELLIPSIS = "…";
-
-// Clamp on a character boundary so we never emit a split codepoint. The budget
-// covers the ellipsis too -- it is three bytes in UTF-8, not one.
-function truncateBytes(text: string, budget: number) {
-  if (byteLength(text) <= budget) {
-    return text;
-  }
-
-  const allowance = budget - byteLength(ELLIPSIS);
-  let result = "";
-
-  for (const character of text) {
-    if (byteLength(result + character) > allowance) {
-      break;
-    }
-    result += character;
-  }
-
-  return result + ELLIPSIS;
-}
-
 function delay(milliseconds: number) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
-}
-
-// Pack lines into whichever page was asked for. Any listing longer than a
-// couple of entries outgrows a single packet, so this is shared rather than
-// reimplemented per module.
-function paginate(lines: string[], page: number, moreCommand: string, budget = MAX_TEXT_BYTES) {
-  if (lines.length === 0) {
-    return "";
-  }
-
-  const perPage = budget - 28; // reserve room for the "(1/3) more" footer
-  const pages: string[][] = [];
-  let current: string[] = [];
-  let size = 0;
-
-  lines.forEach((line) => {
-    const cost = byteLength(line) + 1; // newline
-
-    if (current.length > 0 && size + cost > perPage) {
-      pages.push(current);
-      current = [];
-      size = 0;
-    }
-
-    current.push(line);
-    size += cost;
-  });
-
-  if (current.length > 0) {
-    pages.push(current);
-  }
-
-  const index = Math.min(Math.max(page, 1), pages.length) - 1;
-  const body = pages[index].join("\n");
-
-  if (pages.length === 1) {
-    return body;
-  }
-
-  const next = index + 2 <= pages.length ? ` ${moreCommand} ${index + 2}` : "";
-
-  return `${body}\n(${index + 1}/${pages.length})${next}`;
 }
 
 function formatDuration(milliseconds: number) {
@@ -205,10 +131,11 @@ function formatDuration(milliseconds: number) {
   return minutes > 0 ? `${minutes}m` : `${seconds}s`;
 }
 
-function parsePage(args: string[]) {
-  const page = Number.parseInt(args[0] ?? "1", 10);
-
-  return Number.isFinite(page) ? page : 1;
+// A meshthing that is only a list of commands -- nothing to configure, nothing
+// to open, nothing to clean up. Anything that needs config or a lifecycle wants
+// the full module form, because create() is where those belong.
+function commandsModule(name: string, description: string, commands: Command[]): MeshThingModule {
+  return { name, description, create: () => ({ commands }) };
 }
 
 function normalizeSpec<Config>(spec: ModuleSpec<Config>) {
@@ -250,18 +177,14 @@ function createMeshThing(options: MeshThingOptions = {}) {
   // Attach to an already-constructed device. Kept separate from the serial
   // helper below so any transport (TCP, BLE, a fake in tests) can be used.
   // Must run before device.configure(), or the node info event is missed.
-  async function listen(device: MeshDevice, source: CommandMap | ModuleSpec[]) {
+  async function listen(device: MeshDevice, modules: ModuleSpec[]) {
     device.events.onMyNodeInfo.subscribe((nodeInfo: Protobuf.Mesh.MyNodeInfo) => {
       myNodeInfo = nodeInfo;
     });
 
     meshDevice = device;
 
-    if (Array.isArray(source)) {
-      await mountModules(source);
-    } else {
-      mountCommandMap(source);
-    }
+    await mountModules(modules);
 
     registerBuiltins();
 
@@ -270,15 +193,6 @@ function createMeshThing(options: MeshThingOptions = {}) {
 
     // Drain anything queued while we were still connecting
     void pump();
-  }
-
-  // A bare CommandMap is a single anonymous module -- the simple case stays simple
-  function mountCommandMap(commandMap: CommandMap) {
-    registerCommands("app", {}, commandMap.commands);
-
-    if (commandMap.default) {
-      defaultHandler = commandMap.default;
-    }
   }
 
   async function mountModules(specs: ModuleSpec[]) {
@@ -416,7 +330,10 @@ function createMeshThing(options: MeshThingOptions = {}) {
     ];
 
     if (claimed.length > 0) {
-      helpSummaries.push({ name: "core", words: claimed });
+      // First, not last: with several things mounted the help paginates, and
+      // the built-ins are what you need when something is wrong. They should
+      // not be on page two.
+      helpSummaries.unshift({ name: "core", words: claimed });
     }
   }
 
@@ -547,11 +464,11 @@ function createMeshThing(options: MeshThingOptions = {}) {
     send(result, { to: messagePacket.from, channel: messagePacket.channel });
   }
 
-  async function configureAndListen(deviceString: string, source: CommandMap | ModuleSpec[]) {
+  async function configureAndListen(deviceString: string, modules: ModuleSpec[]) {
     const transport = await TransportNodeSerial.create(deviceString);
     const device = new MeshDevice(transport);
 
-    await listen(device, source);
+    await listen(device, modules);
 
     await device.configure();
 
@@ -596,7 +513,6 @@ type MeshThing = ReturnType<typeof createMeshThing>;
 
 export type {
   Command,
-  CommandMap,
   CommandContext,
   CommandHandler,
   MeshThing,
@@ -609,4 +525,4 @@ export type {
   Stats,
 };
 
-export { createMeshThing, byteLength, truncateBytes, paginate, parsePage, MAX_TEXT_BYTES };
+export { createMeshThing, commandsModule };

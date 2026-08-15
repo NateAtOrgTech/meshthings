@@ -1,31 +1,35 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 
-import { CommandMap, createMeshThing } from "./meshthing";
-import { createFakeDevice, DEFAULT_SENDER, FakeDeviceOptions } from "./testing";
+import { Command, CommandHandler, commandsModule, createMeshThing } from "../meshthing.js";
+
+// The fixture shape these tests find convenient. Not a core type: the core takes
+// modules, and `default` is the core's onUnknown option.
+type Fixture = { commands: Command[]; default?: CommandHandler };
+import { createMockDevice, DEFAULT_SENDER, MockDeviceOptions } from "../../testing/index.js";
 
 type SetupOptions = {
   // Pacing is exercised on its own below; everywhere else it just gets in the way
   minSendIntervalMs?: number;
   maxQueueLength?: number;
-  onUnknown?: CommandMap["default"];
-  device?: FakeDeviceOptions;
+  onUnknown?: CommandHandler;
+  device?: MockDeviceOptions;
 };
 
-async function setup(commandMap: CommandMap, options: SetupOptions = {}) {
-  const fake = createFakeDevice(options.device);
+async function setup(fixture: Fixture, options: SetupOptions = {}) {
+  const fake = createMockDevice(options.device);
   const thing = createMeshThing({
     minSendIntervalMs: options.minSendIntervalMs ?? 0,
     maxQueueLength: options.maxQueueLength,
-    onUnknown: options.onUnknown,
+    onUnknown: options.onUnknown ?? fixture.default,
   });
 
-  await thing.listen(fake.device, commandMap);
+  await thing.listen(fake.device, [commandsModule("app", "test commands", fixture.commands)]);
 
   return { fake, thing };
 }
 
-const echo: CommandMap = {
+const echo: Fixture = {
   commands: [{ commandStrings: ["echo", "e"], commandFunction: (args) => args.join("|") }],
   default: () => "help",
 };
@@ -376,7 +380,7 @@ describe("outbound queue", () => {
   });
 
   test("queues messages sent before the radio is attached", async () => {
-    const fake = createFakeDevice();
+    const fake = createMockDevice();
     const thing = createMeshThing({ minSendIntervalMs: 0 });
 
     thing.send("early bird");
@@ -384,7 +388,7 @@ describe("outbound queue", () => {
 
     assert.deepEqual(fake.texts(), []);
 
-    await thing.listen(fake.device, { commands: [] });
+    await thing.listen(fake.device, [commandsModule("app", "test commands", [])]);
 
     assert.equal((await fake.waitForSends(1))[0].text, "early bird");
   });

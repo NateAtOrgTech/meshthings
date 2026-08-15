@@ -2,9 +2,9 @@ import { test, describe, after } from "node:test";
 import assert from "node:assert/strict";
 import dgram from "dgram";
 
-import { createMeshThing, MeshThing } from "./meshthing";
-import { createFakeDevice } from "./testing";
-import { weatherModule, WeatherConfig } from "./weather";
+import { createMeshThing, MeshThing } from "../../../core/index.js";
+import { createMockDevice } from "../../../testing/index.js";
+import { weatherModule, WeatherConfig } from "../index.js";
 
 // Ask the OS for a free port so parallel runs don't fight over a fixed one
 function freePort() {
@@ -35,7 +35,7 @@ after(async () => {
 
 async function setup(config: Partial<WeatherConfig> = {}) {
   const port = await freePort();
-  const fake = createFakeDevice();
+  const fake = createMockDevice();
   const thing = createMeshThing({ minSendIntervalMs: 0 });
 
   await thing.listen(fake.device, [{ module: weatherModule, config: { port, ...config } }]);

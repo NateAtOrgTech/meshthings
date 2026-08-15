@@ -1,6 +1,6 @@
 import { MeshDevice, Types } from "@meshtastic/core";
 
-// A stand-in for a real radio. Deliberately a *device*-level fake rather than a
+// A stand-in for a real radio. Deliberately a *device*-level mock rather than a
 // Transport-level one: mocking Transport means hand-building protobuf frames,
 // which tests meshtastic's plumbing instead of your commands.
 
@@ -12,7 +12,7 @@ type SentMessage = {
   to: Types.Destination;
   wantAck: boolean;
   channel: Types.ChannelNumber | undefined;
-  // Milliseconds since the fake was created, for asserting on pacing
+  // Milliseconds since the mock was created, for asserting on pacing
   at: number;
 };
 
@@ -22,7 +22,7 @@ type ReceiveOptions = {
   channel?: Types.ChannelNumber;
 };
 
-type FakeDeviceOptions = {
+type MockDeviceOptions = {
   nodeNum?: number;
   // Hold back the node-identity event, to test packets arriving before the
   // radio has told us who we are
@@ -45,7 +45,7 @@ function createEmitter<T>() {
   };
 }
 
-function createFakeDevice(options: FakeDeviceOptions = {}) {
+function createMockDevice(options: MockDeviceOptions = {}) {
   const nodeNum = options.nodeNum ?? DEFAULT_NODE_NUM;
   const start = Date.now();
   const sent: SentMessage[] = [];
@@ -152,8 +152,8 @@ function createFakeDevice(options: FakeDeviceOptions = {}) {
   };
 }
 
-type FakeDevice = ReturnType<typeof createFakeDevice>;
+type MockDevice = ReturnType<typeof createMockDevice>;
 
-export type { FakeDevice, FakeDeviceOptions, SentMessage };
+export type { MockDevice, MockDeviceOptions, SentMessage };
 
-export { createFakeDevice, DEFAULT_NODE_NUM, DEFAULT_SENDER };
+export { createMockDevice, DEFAULT_NODE_NUM, DEFAULT_SENDER };

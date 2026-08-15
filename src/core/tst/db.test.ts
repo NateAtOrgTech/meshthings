@@ -1,9 +1,9 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 
-import { createDirectory } from "./directory";
-import { openDatabase } from "./db";
-import { createSubscribers } from "./subscribers";
+import { createDirectory } from "../../things/directory/index.js";
+import { openDatabase } from "../db.js";
+import { createSubscribers } from "../subscribers.js";
 
 // node:sqlite finalizes a database's prepared statements when the handle is
 // collected. These force the collection that otherwise happens at an
@@ -20,8 +20,8 @@ function collectGarbage() {
 describe("surviving garbage collection", () => {
   test("keeps a directory's statements usable after a collection", async () => {
     const directory = createDirectory(":memory:");
-    const register = directory.commands.find((command) => command.commandStrings.includes("register"))!;
-    const whois = directory.commands.find((command) => command.commandStrings.includes("whois"))!;
+    const register = directory.find((command) => command.commandStrings.includes("register"))!;
+    const whois = directory.find((command) => command.commandStrings.includes("whois"))!;
     const context = { from: 111 } as never;
 
     await register.commandFunction(["tides", "Tide", "times"], context);

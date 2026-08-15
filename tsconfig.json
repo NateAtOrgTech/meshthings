@@ -1,8 +1,8 @@
 {
   "compilerOptions": {
     "target": "es2022",
-    "module": "esnext",
-    "moduleResolution": "node", // Highly recommended for Node.js
+    "module": "nodenext",
+    "moduleResolution": "nodenext", // Node ESM: explicit specifiers, resolved from package.json "type"
     "outDir": "./dist" /* Redirect output structure to the directory */,
     "rootDir": "./src" /* Specify the root directory of input files */,
     "strict": true /* Enable all strict type-checking options */,

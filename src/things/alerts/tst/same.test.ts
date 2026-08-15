@@ -1,7 +1,7 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 
-import { areaMatches, parseSame } from "./same";
+import { areaMatches, parseSame } from "../same.js";
 
 // 2024-05-02T21:15:00Z is day 123 of the year, matching the stamps below
 const NOW = Date.UTC(2024, 4, 2, 21, 20);

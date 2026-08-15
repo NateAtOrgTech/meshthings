@@ -1,9 +1,10 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 
-import { createMeshThing, MAX_TEXT_BYTES } from "./meshthing";
-import { createSubscribers, subscriptionCommands, SubscriptionCommandOptions } from "./subscribers";
-import { createFakeDevice } from "./testing";
+import { commandsModule, createMeshThing } from "../meshthing.js";
+import { MAX_TEXT_BYTES } from "../text.js";
+import { createSubscribers, subscriptionCommands, SubscriptionCommandOptions } from "../subscribers.js";
+import { createMockDevice } from "../../testing/index.js";
 
 function store() {
   return createSubscribers(":memory:");
@@ -195,11 +196,11 @@ describe("recipient selection", () => {
   });
 
   test("fans out a real alert to matching subscribers only", async () => {
-    const fake = createFakeDevice();
+    const fake = createMockDevice();
     const thing = createMeshThing({ minSendIntervalMs: 0 });
     const subscribers = store();
 
-    await thing.listen(fake.device, { commands: [] });
+    await thing.listen(fake.device, [commandsModule("subs", "subscription commands", [])]);
 
     subscribers.subscribe(111, { topic: "alerts", filter: "023005" });
     subscribers.subscribe(222, { topic: "alerts", filter: "023031" });
@@ -241,11 +242,13 @@ describe("shared database", () => {
 
 describe("on-mesh commands", () => {
   async function setup(options: SubscriptionCommandOptions = {}) {
-    const fake = createFakeDevice();
+    const fake = createMockDevice();
     const thing = createMeshThing({ minSendIntervalMs: 0 });
     const subscribers = createSubscribers(":memory:", options.topic ?? "default");
 
-    await thing.listen(fake.device, { commands: subscriptionCommands(subscribers, options) });
+    await thing.listen(fake.device, [
+      commandsModule("subs", "subscription commands", subscriptionCommands(subscribers, options)),
+    ]);
 
     async function ask(text: string, from = 0x1000) {
       const before = fake.sent.length;

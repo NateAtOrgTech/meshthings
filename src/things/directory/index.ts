@@ -1,14 +1,4 @@
-import { DatabaseHandle, openDatabase } from "./db";
-import {
-  byteLength,
-  CommandContext,
-  CommandMap,
-  MAX_TEXT_BYTES,
-  MeshThingModule,
-  paginate,
-  parsePage,
-  truncateBytes,
-} from "./meshthing";
+import { byteLength, CommandContext, Command, DatabaseHandle, MAX_TEXT_BYTES, MeshThingModule, openDatabase, paginate, parsePage, truncateBytes } from "../../core/index.js";
 
 const MAX_REPLY_BYTES = MAX_TEXT_BYTES;
 const MAX_NAME_BYTES = 24;
@@ -28,7 +18,7 @@ function formatNodeId(nodeNum: number) {
   return "!" + (nodeNum >>> 0).toString(16).padStart(8, "0");
 }
 
-function createDirectory(database: string | DatabaseHandle = "directory.db"): CommandMap {
+function createDirectory(database: string | DatabaseHandle = "directory.db"): Command[] {
   const db = openDatabase(database);
 
   db.exec(`CREATE TABLE IF NOT EXISTS services (
@@ -129,20 +119,13 @@ function createDirectory(database: string | DatabaseHandle = "directory.db"): Co
     return truncateBytes(`${row.name} ${formatNodeId(row.node_num)}\n${row.description}\nupdated ${days}d ago`, MAX_REPLY_BYTES);
   }
 
-  function help() {
-    return "Directory: services | find <term> | whois <name> | register <name> <desc> | unregister";
-  }
-
-  return {
-    commands: [
-      { commandStrings: ["services", "dir", "ls"], commandFunction: services },
-      { commandStrings: ["find", "search"], commandFunction: find },
-      { commandStrings: ["whois", "who"], commandFunction: whois },
-      { commandStrings: ["register", "reg"], commandFunction: register },
-      { commandStrings: ["unregister", "unreg"], commandFunction: unregister },
-    ],
-    default: help,
-  };
+  return [
+    { commandStrings: ["services", "dir", "ls"], commandFunction: services },
+    { commandStrings: ["find", "search"], commandFunction: find },
+    { commandStrings: ["whois", "who"], commandFunction: whois },
+    { commandStrings: ["register", "reg"], commandFunction: register },
+    { commandStrings: ["unregister", "unreg"], commandFunction: unregister },
+  ];
 }
 
 type DirectoryConfig = {
@@ -156,7 +139,7 @@ const directoryModule: MeshThingModule<DirectoryConfig> = {
   create({ config }) {
     // The help default is dropped -- with several modules mounted, the core
     // aggregates help across all of them
-    return { commands: createDirectory(config?.database ?? "directory.db").commands };
+    return { commands: createDirectory(config?.database ?? "directory.db") };
   },
 };
 
