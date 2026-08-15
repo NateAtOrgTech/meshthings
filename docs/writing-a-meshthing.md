@@ -171,21 +171,21 @@ modules: [
 
 ## Testing without a radio
 
-`createFakeDevice()` stands in for hardware. It records what was transmitted, injects inbound messages, and lets you assert on ordering and timing.
+Tests go in your thing's own `tst/` folder â€” `src/things/tides/tst/tides.test.ts`. `createMockDevice()` stands in for hardware. It records what was transmitted, injects inbound messages, and lets you assert on ordering and timing.
 
 ```ts
-import { createMeshThing } from "../../meshthing.js";
-import { createFakeDevice } from "../../testing.js";
-import { tidesModule } from "./index.js";
+import { createMeshThing } from "../../../meshthing.js";
+import { createMockDevice } from "../../../mockMeshtasticDevice.js";
+import { tidesModule } from "../index.js";
 
-const fake = createFakeDevice();
+const mock = createMockDevice();
 const thing = createMeshThing({ minSendIntervalMs: 0 });
 
-await thing.listen(fake.device, [{ module: tidesModule, config: {} }]);
+await thing.listen(mock.device, [{ module: tidesModule, config: {} }]);
 
-fake.receive("tides", { from: 4242 });
+mock.receive("tides", { from: 4242 });
 
-const [message] = await fake.waitForSends(1);
+const [message] = await mock.waitForSends(1);
 
 assert.match(message.text, /High/);
 assert.equal(message.to, 4242);
@@ -218,5 +218,5 @@ If your thing has a parser or a formatter, test it directly as a pure function â
 - [ ] `stop()` releases it, and is safe to call twice
 - [ ] Replies fit 180 bytes; lists paginate
 - [ ] Command words are specific enough not to collide
-- [ ] Tests cover it against the fake device, including the byte limit
+- [ ] Tests live in the thing's `tst/` folder and cover it against the mock device, including the byte limit
 - [ ] Anything that can be a pure function is one, and is tested as one

@@ -2,12 +2,12 @@ import { test, describe, after } from "node:test";
 import assert from "node:assert/strict";
 import dgram from "dgram";
 
-import { alertsModule } from "./things/alerts/index.js";
-import { openDatabase } from "./db.js";
-import { directoryModule } from "./things/directory/index.js";
-import { createMeshThing, MAX_TEXT_BYTES, MeshThing } from "./meshthing.js";
-import { createFakeDevice } from "./testing.js";
-import { weatherModule } from "./things/weather/index.js";
+import { alertsModule } from "../things/alerts/index.js";
+import { openDatabase } from "../db.js";
+import { directoryModule } from "../things/directory/index.js";
+import { createMeshThing, MAX_TEXT_BYTES, MeshThing } from "../meshthing.js";
+import { createMockDevice } from "../mockMeshtasticDevice.js";
+import { weatherModule } from "../things/weather/index.js";
 
 // The deployment shape: every meshthing on one radio, one database
 const running: MeshThing[] = [];
@@ -33,7 +33,7 @@ function freePort() {
 
 async function setup() {
   const database = openDatabase(":memory:");
-  const fake = createFakeDevice();
+  const fake = createMockDevice();
   const thing = createMeshThing({ minSendIntervalMs: 0 });
 
   let emit: ((line: string) => void) | undefined;

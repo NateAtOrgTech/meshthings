@@ -189,9 +189,11 @@ See [docs/writing-a-meshthing.md](docs/writing-a-meshthing.md) for the full cont
 npm test
 ```
 
-216 tests, no test framework beyond what Node ships. They run without a radio: `src/testing.ts` provides a device-level fake that records what was transmitted, injects inbound messages, and lets tests assert on pacing and priority.
+216 tests, no test framework beyond what Node ships. They run without a radio: [src/mockMeshtasticDevice.ts](src/mockMeshtasticDevice.ts) provides a device-level mock that records what was transmitted, injects inbound messages, and lets tests assert on pacing and priority.
 
 This is deliberately *not* a `Transport`-level mock. Mocking there means hand-building protobuf frames, which tests Meshtastic's plumbing rather than your commands.
+
+Tests live next to what they cover: core tests in `src/tst/`, and each thing's tests in its own `tst/` folder.
 
 ## Deployment
 

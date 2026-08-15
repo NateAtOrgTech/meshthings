@@ -1,10 +1,10 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 
-import { alertsModule, AlertsConfig, createSpawnSource } from "./index.js";
-import { DatabaseHandle, openDatabase } from "../../db.js";
-import { createMeshThing, MAX_TEXT_BYTES } from "../../meshthing.js";
-import { createFakeDevice } from "../../testing.js";
+import { alertsModule, AlertsConfig, createSpawnSource } from "../index.js";
+import { DatabaseHandle, openDatabase } from "../../../db.js";
+import { createMeshThing, MAX_TEXT_BYTES } from "../../../meshthing.js";
+import { createMockDevice } from "../../../mockMeshtasticDevice.js";
 
 const NOW = Date.UTC(2024, 4, 2, 21, 20);
 const DAY = 24 * 60 * 60 * 1000;
@@ -42,7 +42,7 @@ function fakeSource() {
 async function setup(config: Partial<AlertsConfig> = {}, database?: DatabaseHandle, minSendIntervalMs = 0) {
   const db = database ?? openDatabase(":memory:");
   const decoder = fakeSource();
-  const fake = createFakeDevice();
+  const fake = createMockDevice();
   const thing = createMeshThing({ minSendIntervalMs });
 
   let clock = NOW;
@@ -312,7 +312,7 @@ describe("receiver health", () => {
   });
 
   test("says plainly when no decoder is configured", async () => {
-    const fake = createFakeDevice();
+    const fake = createMockDevice();
     const thing = createMeshThing({ minSendIntervalMs: 0 });
 
     await thing.listen(fake.device, [

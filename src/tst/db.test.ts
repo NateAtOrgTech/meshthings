@@ -1,9 +1,9 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 
-import { createDirectory } from "./things/directory/index.js";
-import { openDatabase } from "./db.js";
-import { createSubscribers } from "./subscribers.js";
+import { createDirectory } from "../things/directory/index.js";
+import { openDatabase } from "../db.js";
+import { createSubscribers } from "../subscribers.js";
 
 // node:sqlite finalizes a database's prepared statements when the handle is
 // collected. These force the collection that otherwise happens at an

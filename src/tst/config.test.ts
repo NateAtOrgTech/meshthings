@@ -2,10 +2,10 @@ import { test, describe, after } from "node:test";
 import assert from "node:assert/strict";
 import dgram from "dgram";
 
-import { createConfig } from "./meshthings.config.js";
-import { createExampleConfig } from "./meshthings.config.example.js";
-import { createMeshThing, MeshThing } from "./meshthing.js";
-import { createFakeDevice } from "./testing.js";
+import { createConfig } from "../meshthings.config.js";
+import { createExampleConfig } from "../meshthings.config.example.js";
+import { createMeshThing, MeshThing } from "../meshthing.js";
+import { createMockDevice } from "../mockMeshtasticDevice.js";
 
 // The deployment's own configuration, mounted for real. A command collision or
 // a broken module config fails startup, and finding that here beats finding it
@@ -50,7 +50,7 @@ async function withTestEnvironment<T>(run: () => T): Promise<T> {
 
 async function mountConfigured() {
   const config = await withTestEnvironment(() => createConfig());
-  const fake = createFakeDevice();
+  const fake = createMockDevice();
   const thing = createMeshThing({ minSendIntervalMs: 0 });
 
   await thing.listen(fake.device, config.modules);

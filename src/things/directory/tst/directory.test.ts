@@ -1,14 +1,14 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 
-import { createDirectory } from "./index.js";
-import { createMeshThing, MAX_TEXT_BYTES } from "../../meshthing.js";
-import { createFakeDevice } from "../../testing.js";
+import { createDirectory } from "../index.js";
+import { createMeshThing, MAX_TEXT_BYTES } from "../../../meshthing.js";
+import { createMockDevice } from "../../../mockMeshtasticDevice.js";
 
 // Driven through a real meshthing rather than by calling handlers directly, so
 // these also cover routing, argument splitting, and the outbound byte cap.
 async function setup() {
-  const fake = createFakeDevice();
+  const fake = createMockDevice();
   const thing = createMeshThing({ minSendIntervalMs: 0 });
 
   await thing.listen(fake.device, createDirectory(":memory:"));

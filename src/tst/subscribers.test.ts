@@ -1,9 +1,9 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 
-import { createMeshThing, MAX_TEXT_BYTES } from "./meshthing.js";
-import { createSubscribers, subscriptionCommands, SubscriptionCommandOptions } from "./subscribers.js";
-import { createFakeDevice } from "./testing.js";
+import { createMeshThing, MAX_TEXT_BYTES } from "../meshthing.js";
+import { createSubscribers, subscriptionCommands, SubscriptionCommandOptions } from "../subscribers.js";
+import { createMockDevice } from "../mockMeshtasticDevice.js";
 
 function store() {
   return createSubscribers(":memory:");
@@ -195,7 +195,7 @@ describe("recipient selection", () => {
   });
 
   test("fans out a real alert to matching subscribers only", async () => {
-    const fake = createFakeDevice();
+    const fake = createMockDevice();
     const thing = createMeshThing({ minSendIntervalMs: 0 });
     const subscribers = store();
 
@@ -241,7 +241,7 @@ describe("shared database", () => {
 
 describe("on-mesh commands", () => {
   async function setup(options: SubscriptionCommandOptions = {}) {
-    const fake = createFakeDevice();
+    const fake = createMockDevice();
     const thing = createMeshThing({ minSendIntervalMs: 0 });
     const subscribers = createSubscribers(":memory:", options.topic ?? "default");
 

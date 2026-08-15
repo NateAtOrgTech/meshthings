@@ -1,19 +1,19 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 
-import { CommandMap, createMeshThing } from "./meshthing.js";
-import { createFakeDevice, DEFAULT_SENDER, FakeDeviceOptions } from "./testing.js";
+import { CommandMap, createMeshThing } from "../meshthing.js";
+import { createMockDevice, DEFAULT_SENDER, MockDeviceOptions } from "../mockMeshtasticDevice.js";
 
 type SetupOptions = {
   // Pacing is exercised on its own below; everywhere else it just gets in the way
   minSendIntervalMs?: number;
   maxQueueLength?: number;
   onUnknown?: CommandMap["default"];
-  device?: FakeDeviceOptions;
+  device?: MockDeviceOptions;
 };
 
 async function setup(commandMap: CommandMap, options: SetupOptions = {}) {
-  const fake = createFakeDevice(options.device);
+  const fake = createMockDevice(options.device);
   const thing = createMeshThing({
     minSendIntervalMs: options.minSendIntervalMs ?? 0,
     maxQueueLength: options.maxQueueLength,
@@ -376,7 +376,7 @@ describe("outbound queue", () => {
   });
 
   test("queues messages sent before the radio is attached", async () => {
-    const fake = createFakeDevice();
+    const fake = createMockDevice();
     const thing = createMeshThing({ minSendIntervalMs: 0 });
 
     thing.send("early bird");

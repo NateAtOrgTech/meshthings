@@ -1,8 +1,8 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 
-import { createMeshThing, MAX_TEXT_BYTES, MeshThingModule, MeshThingOptions, ModuleSpec } from "./meshthing.js";
-import { createFakeDevice } from "./testing.js";
+import { createMeshThing, MAX_TEXT_BYTES, MeshThingModule, MeshThingOptions, ModuleSpec } from "../meshthing.js";
+import { createMockDevice } from "../mockMeshtasticDevice.js";
 
 const START = Date.UTC(2024, 4, 2, 12, 0);
 
@@ -15,7 +15,7 @@ function moduleNamed(name: string, words: string[], description = `${name} modul
 }
 
 async function mount(specs: ModuleSpec[] = [], options: MeshThingOptions = {}) {
-  const fake = createFakeDevice();
+  const fake = createMockDevice();
   let clock = START;
 
   const thing = createMeshThing({
