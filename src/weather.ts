@@ -1,47 +1,92 @@
-import { CommandMap } from "./meshthing";
-import dgram, { BindOptions } from "dgram";
+import dgram from "dgram";
 
-const server = dgram.createSocket("udp4");
+import { MeshThingModule } from "./meshthing";
 
-server.on("error", (error: Error) => {
-  console.error(`server error:\n${error.stack}`);
-  server.close();
-});
+const DEFAULT_PORT = 41234;
+// A Tempest broadcasts every minute; well past that and we are reporting fiction
+const STALE_AFTER_MS = 10 * 60 * 1000;
 
-server.on("message", (message, udpInfo) => {
-  const parsedMessage = JSON.parse(message.toString());
-
-  if (parsedMessage.type === "obs_st") {
-    data.temperatureC = parsedMessage.obs[0][7];
-    data.temperatureF = data.temperatureC * (9.0 / 5) + 32;
-    data.lastUpdated = Date.now();
-  }
-});
-
-server.on("listening", () => {
-  const address = server.address();
-  console.log(`Listening for weather broadcast on ${address.address}:${address.port}`);
-});
-
-server.bind(process.env.WEATHER_STATION_PORT as BindOptions); // Listen on port 41234
-
-let data = {
-  temperatureC: 0.0,
-  temperatureF: 0.0,
-  lastUpdated: Date.now(),
+type WeatherConfig = {
+  // UDP port the station broadcasts on
+  port?: number;
+  // How old a reading may be before it is reported as stale
+  staleAfterMs?: number;
 };
 
-function temperature() {
-  return data.temperatureC.toFixed(1) + "°C / " + data.temperatureF.toFixed(1) + "°F";
-}
+const weatherModule: MeshThingModule<WeatherConfig> = {
+  name: "weather",
+  description: "Live conditions from a Tempest weather station",
 
-function getHelp() {
-  return "help: t -> temperature";
-}
+  create({ config, log }) {
+    const staleAfterMs = config?.staleAfterMs ?? STALE_AFTER_MS;
 
-const commandMap: CommandMap = {
-  commands: [{ commandStrings: ["temperature", "temp", "t"], commandFunction: temperature }],
-  default: getHelp,
+    const data = {
+      temperatureC: 0,
+      temperatureF: 0,
+      // Zero means nothing has arrived yet, which is not the same as 0 degrees
+      lastUpdated: 0,
+    };
+
+    const server = dgram.createSocket("udp4");
+    let closed = false;
+
+    server.on("error", (error: Error) => {
+      log(`socket error: ${error.message}`);
+
+      if (!closed) {
+        closed = true;
+        server.close();
+      }
+    });
+
+    server.on("message", (message) => {
+      try {
+        const parsed = JSON.parse(message.toString());
+
+        if (parsed.type === "obs_st") {
+          data.temperatureC = parsed.obs[0][7];
+          data.temperatureF = data.temperatureC * (9.0 / 5) + 32;
+          data.lastUpdated = Date.now();
+        }
+      } catch (error) {
+        log(`ignored malformed broadcast: ${error}`);
+      }
+    });
+
+    server.on("listening", () => {
+      const address = server.address();
+
+      log(`listening for weather broadcast on ${address.address}:${address.port}`);
+    });
+
+    server.bind(config?.port ?? DEFAULT_PORT);
+
+    function temperature() {
+      if (!data.lastUpdated) {
+        return "No reading from the station yet";
+      }
+
+      const age = Date.now() - data.lastUpdated;
+      const reading = `${data.temperatureC.toFixed(1)}°C / ${data.temperatureF.toFixed(1)}°F`;
+
+      // Say so rather than quietly serving an old number
+      return age > staleAfterMs ? `${reading} (${Math.floor(age / 60000)}m old)` : reading;
+    }
+
+    return {
+      commands: [{ commandStrings: ["temperature", "temp", "t"], commandFunction: temperature }],
+      // Idempotent: a supervisor may stop twice, and the error handler above
+      // closes the socket on its own
+      stop: () => {
+        if (!closed) {
+          closed = true;
+          server.close();
+        }
+      },
+    };
+  },
 };
 
-export { commandMap };
+export type { WeatherConfig };
+
+export { weatherModule };
