@@ -7,8 +7,7 @@
 //
 // Copy the parts you want across.
 
-import { MeshthingsConfig } from "./config.js";
-import { openDatabase } from "./db.js";
+import { MeshthingsConfig, openDatabase } from "./core/index.js";
 import { alertsModule } from "./things/alerts/index.js";
 import { directoryModule } from "./things/directory/index.js";
 import { weatherModule } from "./things/weather/index.js";

@@ -1,10 +1,12 @@
 import express, { Request, Response } from "express";
 import { createRequire } from "node:module";
 
-import { CommandMap, createMeshThing, MeshThingOptions, ModuleSpec } from "./meshthing.js";
+import { CommandMap, createMeshThing, MeshThingOptions, ModuleSpec } from "../core/index.js";
 
 // Reported by the `sys` command, so an operator can tell what is deployed
-const { version } = createRequire(import.meta.url)("../package.json");
+// ../../ from src/server and from dist/server alike -- both land on the
+// project root, so this resolves the same in development and in a build
+const { version } = createRequire(import.meta.url)("../../package.json");
 
 type StartOptions = MeshThingOptions & {
   // Omit to leave the stats page off
@@ -39,4 +41,4 @@ const meshServer = {
 
 export type { StartOptions };
 
-export { meshServer };
+export { meshServer, version };

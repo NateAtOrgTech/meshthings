@@ -4,8 +4,8 @@ import dgram from "dgram";
 
 import { createConfig } from "../meshthings.config.js";
 import { createExampleConfig } from "../meshthings.config.example.js";
-import { createMeshThing, MeshThing } from "../meshthing.js";
-import { createMockDevice } from "../mockMeshtasticDevice.js";
+import { createMeshThing, MeshThing } from "../core/index.js";
+import { createMockDevice } from "../testing/index.js";
 
 // The deployment's own configuration, mounted for real. A command collision or
 // a broken module config fails startup, and finding that here beats finding it

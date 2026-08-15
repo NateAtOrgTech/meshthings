@@ -2,7 +2,7 @@ import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 
 import { CommandMap, createMeshThing } from "../meshthing.js";
-import { createMockDevice, DEFAULT_SENDER, MockDeviceOptions } from "../mockMeshtasticDevice.js";
+import { createMockDevice, DEFAULT_SENDER, MockDeviceOptions } from "../../testing/index.js";
 
 type SetupOptions = {
   // Pacing is exercised on its own below; everywhere else it just gets in the way

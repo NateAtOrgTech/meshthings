@@ -2,8 +2,8 @@ import { test, describe, after } from "node:test";
 import assert from "node:assert/strict";
 import dgram from "dgram";
 
-import { createMeshThing, MeshThing } from "../../../meshthing.js";
-import { createMockDevice } from "../../../mockMeshtasticDevice.js";
+import { createMeshThing, MeshThing } from "../../../core/index.js";
+import { createMockDevice } from "../../../testing/index.js";
 import { weatherModule, WeatherConfig } from "../index.js";
 
 // Ask the OS for a free port so parallel runs don't fight over a fixed one

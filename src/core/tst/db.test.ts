@@ -1,7 +1,7 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 
-import { createDirectory } from "../things/directory/index.js";
+import { createDirectory } from "../../things/directory/index.js";
 import { openDatabase } from "../db.js";
 import { createSubscribers } from "../subscribers.js";
 

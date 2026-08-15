@@ -3,10 +3,9 @@ import assert from "node:assert/strict";
 import dgram from "dgram";
 
 import { alertsModule } from "../things/alerts/index.js";
-import { openDatabase } from "../db.js";
+import { createMeshThing, MAX_TEXT_BYTES, MeshThing, openDatabase } from "../core/index.js";
 import { directoryModule } from "../things/directory/index.js";
-import { createMeshThing, MAX_TEXT_BYTES, MeshThing } from "../meshthing.js";
-import { createMockDevice } from "../mockMeshtasticDevice.js";
+import { createMockDevice } from "../testing/index.js";
 import { weatherModule } from "../things/weather/index.js";
 
 // The deployment shape: every meshthing on one radio, one database

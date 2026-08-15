@@ -1,7 +1,7 @@
 import "dotenv/config";
 
 import { createConfig } from "./meshthings.config.js";
-import { meshServer } from "./meshserver.js";
+import { meshServer } from "./server/meshserver.js";
 
 // Deliberately thin. Everything a deployment decides lives in
 // meshthings.config.ts, which upstream never edits, so pulling upstream

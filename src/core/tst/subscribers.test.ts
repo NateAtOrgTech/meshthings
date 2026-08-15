@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 
 import { createMeshThing, MAX_TEXT_BYTES } from "../meshthing.js";
 import { createSubscribers, subscriptionCommands, SubscriptionCommandOptions } from "../subscribers.js";
-import { createMockDevice } from "../mockMeshtasticDevice.js";
+import { createMockDevice } from "../../testing/index.js";
 
 function store() {
   return createSubscribers(":memory:");
