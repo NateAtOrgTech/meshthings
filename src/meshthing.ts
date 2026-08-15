@@ -416,7 +416,10 @@ function createMeshThing(options: MeshThingOptions = {}) {
     ];
 
     if (claimed.length > 0) {
-      helpSummaries.push({ name: "core", words: claimed });
+      // First, not last: with several things mounted the help paginates, and
+      // the built-ins are what you need when something is wrong. They should
+      // not be on page two.
+      helpSummaries.unshift({ name: "core", words: claimed });
     }
   }
 

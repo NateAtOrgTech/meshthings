@@ -101,31 +101,46 @@ You should see `Config complete`, `Event registration complete`, and a line per 
 
 ### Configuration
 
-Two layers. Secrets and machine-specific paths go in `.env`; which things run and how they behave is in `src/index.ts`.
+Two layers. Machine-specific paths go in `.env`; which things run and how they behave is in `src/meshthings.config.ts`.
 
 | Variable | Default | What it does |
 | --- | --- | --- |
 | `SERIAL_DEVICE` | *(required)* | Serial path of the Meshtastic node |
-| `PORT` | — | Port for the local HTTP stats page |
+| `PORT` | *(unset)* | Port for the local HTTP stats page. Unset leaves it off. |
 | `WEATHER_STATION_PORT` | `41234` | UDP port the Tempest broadcasts on |
 | `MESH_DB` | `mesh.db` | SQLite file for the directory and subscribers |
 | `TIME_ZONE` | `America/New_York` | IANA zone for rendering alert expiry times |
 | `SAME_DECODER_COMMAND` | *(unset)* | Decoder to spawn. **Unset means no alerts are received.** |
 | `SAME_DECODER_ARGS` | — | Space-separated arguments for it |
 
-Which things run is a list in [src/index.ts](src/index.ts):
+### meshthings.config.ts is yours
+
+Which things run, and how each is configured, is [src/meshthings.config.ts](src/meshthings.config.ts):
 
 ```ts
-await meshServer.start(process.env.SERIAL_DEVICE || "", [
-  { module: weatherModule, config: { port: 41234 } },
-  { module: directoryModule, config: { database } },
-  { module: alertsModule, config: { database, areaNames: { "023005": "Cumberland" } } },
-]);
+function createConfig(): MeshthingsConfig {
+  const database = openDatabase(process.env.MESH_DB || "mesh.db");
+
+  return {
+    device: process.env.SERIAL_DEVICE || "",
+    modules: [
+      { module: weatherModule, config: { port: 41234 } },
+      { module: directoryModule, config: { database } },
+      { module: alertsModule, config: { database, areaNames: { "023005": "Cumberland" } } },
+    ],
+  };
+}
 ```
 
-Delete an entry to stop running that thing. `areaNames` maps the FIPS county codes your mesh covers to readable names — anything unlisted falls back to its raw code, so only list the counties you care about.
+**Upstream created that file once and will never modify it again.** That is what makes forking work: describe your node there, commit it to your fork, and `git merge upstream` can never conflict with your configuration, because upstream has no competing version of the file to merge.
 
-If two things want the same command word, startup fails and tells you which two. Resolve it in the deployment without touching either module:
+[src/meshthings.config.example.ts](src/meshthings.config.example.ts) is upstream's, and is kept current as things are added — read it for what is available, copy what you want across, but do not configure your node in it, because it changes.
+
+Configuration is code rather than JSON on purpose: a typo in a county code is a compile error instead of a silent misconfiguration in an alerting system, and the file can read the environment and decide what to mount rather than needing a config language that grows into a bad programming language.
+
+Delete an entry to stop running that thing. `areaNames` maps the FIPS county codes your mesh covers to readable names — anything unlisted falls back to its raw code, so list only the counties you care about.
+
+If two things want the same command word, startup fails and tells you which two. Resolve it in your config, without touching either module:
 
 ```ts
 { module: alertsModule, rename: { status: "alertstatus" } }
@@ -174,7 +189,7 @@ See [docs/writing-a-meshthing.md](docs/writing-a-meshthing.md) for the full cont
 npm test
 ```
 
-209 tests, no test framework beyond what Node ships. They run without a radio: `src/testing.ts` provides a device-level fake that records what was transmitted, injects inbound messages, and lets tests assert on pacing and priority.
+216 tests, no test framework beyond what Node ships. They run without a radio: `src/testing.ts` provides a device-level fake that records what was transmitted, injects inbound messages, and lets tests assert on pacing and priority.
 
 This is deliberately *not* a `Transport`-level mock. Mocking there means hand-building protobuf frames, which tests Meshtastic's plumbing rather than your commands.
 
@@ -204,7 +219,6 @@ The user running it needs access to the serial device — on most Linux distribu
 
 - **The SAME parser has not been run against real decoder output.** The line handling around it is tested, but confirm the exact format your decoder emits before relying on the alerts thing.
 - **Node prints an `ExperimentalWarning` for `node:sqlite`.** Harmless, and worth knowing about before you deploy for other people.
-- **Configuration lives in `src/index.ts`**, which upstream also edits. If you fork and customise it there, every upstream merge will conflict in that file. Moving the deployment's module list into a file upstream never touches is a planned change.
 - **The directory has no trust model.** Anyone can register anything, and names are first-come.
 
 ## Licence

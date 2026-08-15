@@ -88,10 +88,11 @@ describe("all three meshthings on one node", () => {
     assert.match(await ask("receiver"), /No weekly test seen yet/);
   });
 
-  test("lists every module in one help reply", async () => {
+  test("lists every module across the help pages", async () => {
     const { ask } = await setup();
 
-    const help = await ask("help");
+    // Three things plus the built-ins does not fit one packet, so help pages
+    const help = (await ask("help")) + "\n" + (await ask("help 2"));
 
     assert.match(help, /weather/);
     assert.match(help, /directory/);

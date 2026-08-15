@@ -156,6 +156,19 @@ sendMany("High 14:05", subscribers.nodes("tides"));
 
 `subscriptionCommands` gives you `subscribe`, `unsubscribe`, and `status` for free, with configurable words and a `validateFilter` hook. `matching()` selects only subscribers whose stored filter accepts an event.
 
+## Running it on your node
+
+Add it to `src/meshthings.config.ts`, which is your file — upstream never edits it, so this survives every upstream merge:
+
+```ts
+import { tidesModule } from "./things/tides/index.js";
+
+modules: [
+  { module: weatherModule, config: { port: 41234 } },
+  { module: tidesModule, config: { station: "8418150" } },
+],
+```
+
 ## Testing without a radio
 
 `createFakeDevice()` stands in for hardware. It records what was transmitted, injects inbound messages, and lets you assert on ordering and timing.

@@ -6,9 +6,16 @@ import { CommandMap, createMeshThing, MeshThingOptions, ModuleSpec } from "./mes
 // Reported by the `sys` command, so an operator can tell what is deployed
 const { version } = createRequire(import.meta.url)("../package.json");
 
-async function start(deviceString: string, source: CommandMap | ModuleSpec[], options: MeshThingOptions = {}) {
+type StartOptions = MeshThingOptions & {
+  // Omit to leave the stats page off
+  httpPort?: number;
+};
+
+async function start(deviceString: string, source: CommandMap | ModuleSpec[], options: StartOptions = {}) {
+  const { httpPort, ...meshThingOptions } = options;
+
   // Configure and run the meshtastic device
-  const meshThing = createMeshThing({ version, ...options });
+  const meshThing = createMeshThing({ version, ...meshThingOptions });
   await meshThing.configureAndListen(deviceString, source);
 
   // Setup and start the web server
@@ -19,7 +26,9 @@ async function start(deviceString: string, source: CommandMap | ModuleSpec[], op
     res.json({ modules: meshThing.getModules(), ...meshThing.getStats() });
   });
 
-  app.listen(process.env.PORT, () => console.log("Server started"));
+  if (httpPort) {
+    app.listen(httpPort, () => console.log(`Stats page on port ${httpPort}`));
+  }
 
   return meshThing;
 }
@@ -27,5 +36,7 @@ async function start(deviceString: string, source: CommandMap | ModuleSpec[], op
 const meshServer = {
   start,
 };
+
+export type { StartOptions };
 
 export { meshServer };
