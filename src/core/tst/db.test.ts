@@ -20,8 +20,8 @@ function collectGarbage() {
 describe("surviving garbage collection", () => {
   test("keeps a directory's statements usable after a collection", async () => {
     const directory = createDirectory(":memory:");
-    const register = directory.commands.find((command) => command.commandStrings.includes("register"))!;
-    const whois = directory.commands.find((command) => command.commandStrings.includes("whois"))!;
+    const register = directory.find((command) => command.commandStrings.includes("register"))!;
+    const whois = directory.find((command) => command.commandStrings.includes("whois"))!;
     const context = { from: 111 } as never;
 
     await register.commandFunction(["tides", "Tide", "times"], context);

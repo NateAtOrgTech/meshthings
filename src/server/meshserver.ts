@@ -1,7 +1,7 @@
 import express, { Request, Response } from "express";
 import { createRequire } from "node:module";
 
-import { CommandMap, createMeshThing, MeshThingOptions, ModuleSpec } from "../core/index.js";
+import { createMeshThing, MeshThingOptions, ModuleSpec } from "../core/index.js";
 
 // Reported by the `sys` command, so an operator can tell what is deployed
 // ../../ from src/server and from dist/server alike -- both land on the
@@ -13,12 +13,12 @@ type StartOptions = MeshThingOptions & {
   httpPort?: number;
 };
 
-async function start(deviceString: string, source: CommandMap | ModuleSpec[], options: StartOptions = {}) {
+async function start(deviceString: string, modules: ModuleSpec[], options: StartOptions = {}) {
   const { httpPort, ...meshThingOptions } = options;
 
   // Configure and run the meshtastic device
   const meshThing = createMeshThing({ version, ...meshThingOptions });
-  await meshThing.configureAndListen(deviceString, source);
+  await meshThing.configureAndListen(deviceString, modules);
 
   // Setup and start the web server
   const app = express();

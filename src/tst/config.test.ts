@@ -130,6 +130,18 @@ describe("the example configuration", () => {
 
     const names = config.modules.map((spec) => ("module" in spec ? spec.module.name : spec.name));
 
-    assert.deepEqual(names, ["weather", "directory", "alerts"]);
+    assert.deepEqual(names, ["weather", "directory", "alerts", "local"]);
+  });
+
+  test("shows commandsModule being used for node-local commands", async () => {
+    const config = await withTestEnvironment(() => createExampleConfig());
+
+    // The example is the only demonstration consumers get, so it should keep
+    // working rather than quietly rotting into a comment
+    const local = config.modules.find((spec) => ("module" in spec ? spec.module.name : spec.name) === "local");
+    const module = local && "module" in local ? local.module : local;
+    const mounted = await module!.create({} as never);
+
+    assert.ok(mounted.commands.some((command) => command.commandStrings.includes("owner")));
   });
 });

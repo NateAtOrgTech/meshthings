@@ -2,6 +2,20 @@
 
 A meshthing is a service that runs on a mesh node: it registers some commands, optionally pushes messages of its own, and cleans up after itself. This is the contract and the constraints that come with talking over a LoRa radio.
 
+## Two shapes
+
+If your thing is **only a list of commands** — nothing to configure, nothing to open, nothing to clean up — `commandsModule` is the whole of it:
+
+```ts
+import { commandsModule } from "../../core/index.js";
+
+commandsModule("local", "About this node", [
+  { commandStrings: ["owner", "who"], commandFunction: () => "Nate, Freeport ME" },
+]);
+```
+
+That is genuinely rare for something worth packaging, and common for commands a single deployment wants on its own node. If your thing takes config, opens a socket or a database, pushes messages of its own, or needs tearing down, use the full form below — `create()` is where all of those belong, and reaching for `commandsModule` would push that work to import time.
+
 ## The shape
 
 ```ts
@@ -214,6 +228,7 @@ If your thing has a parser or a formatter, test it directly as a pure function �
 
 ## Checklist
 
+- [ ] `commandsModule` if it is only commands; the full form if it has config or a lifecycle
 - [ ] Everything acquired in `create()`, nothing at import time
 - [ ] `stop()` releases it, and is safe to call twice
 - [ ] Replies fit 180 bytes; lists paginate

@@ -7,7 +7,7 @@
 //
 // Copy the parts you want across.
 
-import { MeshthingsConfig, openDatabase } from "./core/index.js";
+import { commandsModule, MeshthingsConfig, openDatabase } from "./core/index.js";
 import { alertsModule } from "./things/alerts/index.js";
 import { directoryModule } from "./things/directory/index.js";
 import { weatherModule } from "./things/weather/index.js";
@@ -60,6 +60,22 @@ function createExampleConfig(): MeshthingsConfig {
           testIntervalDays: 8,
         },
       },
+
+      // Commands that are only about this node, and are nobody else's business
+      // to package. commandsModule is for exactly this: a list of commands with
+      // no config to receive and nothing to clean up. Anything that opens a
+      // socket, reads config, or needs tearing down wants the full module form,
+      // because create() is where those belong.
+      commandsModule("local", "About this node", [
+        {
+          commandStrings: ["owner", "who"],
+          commandFunction: () => "Nate, Freeport ME. Solar, up 24/7. Reply here or find me on the tides net.",
+        },
+        {
+          commandStrings: ["location", "qth"],
+          commandFunction: () => "Bradbury Mtn, 43.90N 70.18W, ~150m ASL",
+        },
+      ]),
 
       // Two meshthings cannot claim the same command word -- startup fails and
       // names both. Resolve it here, without patching either module:

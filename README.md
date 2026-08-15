@@ -138,6 +138,14 @@ function createConfig(): MeshthingsConfig {
 
 Configuration is code rather than JSON on purpose: a typo in a county code is a compile error instead of a silent misconfiguration in an alerting system, and the file can read the environment and decide what to mount rather than needing a config language that grows into a bad programming language.
 
+Commands that are only about your node — who owns it, where it is — do not need a package. `commandsModule` mounts a bare list, and [meshthings.config.example.ts](src/meshthings.config.example.ts) shows it:
+
+```ts
+commandsModule("local", "About this node", [
+  { commandStrings: ["owner", "who"], commandFunction: () => "Nate, Freeport ME" },
+]);
+```
+
 Delete an entry to stop running that thing. `areaNames` maps the FIPS county codes your mesh covers to readable names — anything unlisted falls back to its raw code, so list only the counties you care about.
 
 If two things want the same command word, startup fails and tells you which two. Resolve it in your config, without touching either module:
@@ -189,7 +197,7 @@ See [docs/writing-a-meshthing.md](docs/writing-a-meshthing.md) for the full cont
 npm test
 ```
 
-216 tests, no test framework beyond what Node ships. They run without a radio: [src/mockMeshtasticDevice.ts](src/mockMeshtasticDevice.ts) provides a device-level mock that records what was transmitted, injects inbound messages, and lets tests assert on pacing and priority.
+220 tests, no test framework beyond what Node ships. They run without a radio: [src/mockMeshtasticDevice.ts](src/mockMeshtasticDevice.ts) provides a device-level mock that records what was transmitted, injects inbound messages, and lets tests assert on pacing and priority.
 
 This is deliberately *not* a `Transport`-level mock. Mocking there means hand-building protobuf frames, which tests Meshtastic's plumbing rather than your commands.
 

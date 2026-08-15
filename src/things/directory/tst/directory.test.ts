@@ -2,7 +2,7 @@ import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 
 import { createDirectory } from "../index.js";
-import { createMeshThing, MAX_TEXT_BYTES } from "../../../core/index.js";
+import { commandsModule, createMeshThing, MAX_TEXT_BYTES } from "../../../core/index.js";
 import { createMockDevice } from "../../../testing/index.js";
 
 // Driven through a real meshthing rather than by calling handlers directly, so
@@ -11,7 +11,9 @@ async function setup() {
   const fake = createMockDevice();
   const thing = createMeshThing({ minSendIntervalMs: 0 });
 
-  await thing.listen(fake.device, createDirectory(":memory:"));
+  await thing.listen(fake.device, [
+    commandsModule("directory", "Registry of services", createDirectory(":memory:")),
+  ]);
 
   async function ask(text: string, from = 0x1000) {
     const before = fake.sent.length;

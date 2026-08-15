@@ -33,11 +33,6 @@ type Command = {
   commandFunction: CommandHandler;
 };
 
-type CommandMap = {
-  commands: Command[];
-  default?: CommandHandler;
-};
-
 // What a module is handed when it starts. It gets the outbound API so it can
 // push on its own schedule, not only in reply to a command.
 type ModuleContext<Config = unknown> = {
@@ -136,6 +131,13 @@ function formatDuration(milliseconds: number) {
   return minutes > 0 ? `${minutes}m` : `${seconds}s`;
 }
 
+// A meshthing that is only a list of commands -- nothing to configure, nothing
+// to open, nothing to clean up. Anything that needs config or a lifecycle wants
+// the full module form, because create() is where those belong.
+function commandsModule(name: string, description: string, commands: Command[]): MeshThingModule {
+  return { name, description, create: () => ({ commands }) };
+}
+
 function normalizeSpec<Config>(spec: ModuleSpec<Config>) {
   return "module" in spec ? spec : { module: spec, config: undefined as Config | undefined };
 }
@@ -175,18 +177,14 @@ function createMeshThing(options: MeshThingOptions = {}) {
   // Attach to an already-constructed device. Kept separate from the serial
   // helper below so any transport (TCP, BLE, a fake in tests) can be used.
   // Must run before device.configure(), or the node info event is missed.
-  async function listen(device: MeshDevice, source: CommandMap | ModuleSpec[]) {
+  async function listen(device: MeshDevice, modules: ModuleSpec[]) {
     device.events.onMyNodeInfo.subscribe((nodeInfo: Protobuf.Mesh.MyNodeInfo) => {
       myNodeInfo = nodeInfo;
     });
 
     meshDevice = device;
 
-    if (Array.isArray(source)) {
-      await mountModules(source);
-    } else {
-      mountCommandMap(source);
-    }
+    await mountModules(modules);
 
     registerBuiltins();
 
@@ -195,15 +193,6 @@ function createMeshThing(options: MeshThingOptions = {}) {
 
     // Drain anything queued while we were still connecting
     void pump();
-  }
-
-  // A bare CommandMap is a single anonymous module -- the simple case stays simple
-  function mountCommandMap(commandMap: CommandMap) {
-    registerCommands("app", {}, commandMap.commands);
-
-    if (commandMap.default) {
-      defaultHandler = commandMap.default;
-    }
   }
 
   async function mountModules(specs: ModuleSpec[]) {
@@ -475,11 +464,11 @@ function createMeshThing(options: MeshThingOptions = {}) {
     send(result, { to: messagePacket.from, channel: messagePacket.channel });
   }
 
-  async function configureAndListen(deviceString: string, source: CommandMap | ModuleSpec[]) {
+  async function configureAndListen(deviceString: string, modules: ModuleSpec[]) {
     const transport = await TransportNodeSerial.create(deviceString);
     const device = new MeshDevice(transport);
 
-    await listen(device, source);
+    await listen(device, modules);
 
     await device.configure();
 
@@ -524,7 +513,6 @@ type MeshThing = ReturnType<typeof createMeshThing>;
 
 export type {
   Command,
-  CommandMap,
   CommandContext,
   CommandHandler,
   MeshThing,
@@ -537,4 +525,4 @@ export type {
   Stats,
 };
 
-export { createMeshThing };
+export { createMeshThing, commandsModule };
