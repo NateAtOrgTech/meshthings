@@ -1,6 +1,9 @@
-import Database from "better-sqlite3";
+import { DatabaseSync } from "node:sqlite";
 
-type DatabaseHandle = Database.Database;
+// SQLite comes with Node, so nothing here compiles a native module. That
+// matters most on the hardware this actually runs on -- a Pi should not need a
+// toolchain to install a meshthing.
+type DatabaseHandle = DatabaseSync;
 
 // Accepting a handle as well as a path lets one process share a single file
 // across modules -- the alert app wants its subscribers and its own state
@@ -10,9 +13,9 @@ function openDatabase(target: string | DatabaseHandle): DatabaseHandle {
     return target;
   }
 
-  const db = new Database(target);
+  const db = new DatabaseSync(target);
 
-  db.pragma("journal_mode = WAL");
+  db.exec("PRAGMA journal_mode = WAL");
 
   return db;
 }
