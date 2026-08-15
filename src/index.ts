@@ -1,10 +1,10 @@
 import "dotenv/config";
 
-import { alertsModule } from "./alerts";
+import { alertsModule } from "./things/alerts/index";
 import { openDatabase } from "./db";
-import { directoryModule } from "./directory";
+import { directoryModule } from "./things/directory/index";
 import { meshServer } from "./meshserver";
-import { weatherModule } from "./weather";
+import { weatherModule } from "./things/weather/index";
 
 // One radio, several meshthings. Modules are constructed by the core, so
 // nothing sets up a socket, a database, or a child process just by being imported.

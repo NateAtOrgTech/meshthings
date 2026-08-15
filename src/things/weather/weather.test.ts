@@ -2,9 +2,9 @@ import { test, describe, after } from "node:test";
 import assert from "node:assert/strict";
 import dgram from "dgram";
 
-import { createMeshThing, MeshThing } from "./meshthing";
-import { createFakeDevice } from "./testing";
-import { weatherModule, WeatherConfig } from "./weather";
+import { createMeshThing, MeshThing } from "../../meshthing";
+import { createFakeDevice } from "../../testing";
+import { weatherModule, WeatherConfig } from "./index";
 
 // Ask the OS for a free port so parallel runs don't fight over a fixed one
 function freePort() {

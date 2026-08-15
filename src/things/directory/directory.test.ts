@@ -1,9 +1,9 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 
-import { createDirectory } from "./directory";
-import { createMeshThing, MAX_TEXT_BYTES } from "./meshthing";
-import { createFakeDevice } from "./testing";
+import { createDirectory } from "./index";
+import { createMeshThing, MAX_TEXT_BYTES } from "../../meshthing";
+import { createFakeDevice } from "../../testing";
 
 // Driven through a real meshthing rather than by calling handlers directly, so
 // these also cover routing, argument splitting, and the outbound byte cap.

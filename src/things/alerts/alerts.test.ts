@@ -1,10 +1,10 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 
-import { alertsModule, AlertsConfig, createSpawnSource } from "./alerts";
-import { DatabaseHandle, openDatabase } from "./db";
-import { createMeshThing, MAX_TEXT_BYTES } from "./meshthing";
-import { createFakeDevice } from "./testing";
+import { alertsModule, AlertsConfig, createSpawnSource } from "./index";
+import { DatabaseHandle, openDatabase } from "../../db";
+import { createMeshThing, MAX_TEXT_BYTES } from "../../meshthing";
+import { createFakeDevice } from "../../testing";
 
 const NOW = Date.UTC(2024, 4, 2, 21, 20);
 const DAY = 24 * 60 * 60 * 1000;
