@@ -286,6 +286,70 @@ describe("suppressing repeats and tests", () => {
   });
 });
 
+describe("configuration faults", () => {
+  test("refuses to start on an invalid time zone", async () => {
+    const fake = createMockDevice();
+    const thing = createMeshThing({ minSendIntervalMs: 0 });
+
+    // A typo here would otherwise lie dormant until the first real alert, and
+    // surface as an uncaught RangeError inside the decoder callback
+    await assert.rejects(
+      () =>
+        thing.listen(fake.device, [
+          { module: alertsModule, config: { database: openDatabase(":memory:"), timeZone: "America/NewYork" } },
+        ]),
+      /not a valid IANA time zone/,
+    );
+  });
+
+  test("names the offending zone and what one looks like", async () => {
+    const fake = createMockDevice();
+    const thing = createMeshThing({ minSendIntervalMs: 0 });
+
+    await assert.rejects(
+      () =>
+        thing.listen(fake.device, [
+          { module: alertsModule, config: { database: openDatabase(":memory:"), timeZone: "Mars/Olympus" } },
+        ]),
+      /Mars\/Olympus[\s\S]*America\/New_York/,
+    );
+  });
+
+  test("survives a fault while relaying one alert and keeps relaying the next", async () => {
+    let thrown = false;
+
+    // Stands in for any unforeseen fault in the relay path. Before the error
+    // boundary this reached the child-process callback and killed the node.
+    const areaNames = new Proxy({} as Record<string, string>, {
+      get() {
+        if (!thrown) {
+          thrown = true;
+
+          throw new Error("fault while formatting");
+        }
+
+        return undefined;
+      },
+    });
+
+    const { ask, fake, decoder } = await setup({ areaNames });
+
+    await ask("subscribe 023005", 111);
+    fake.clear();
+
+    decoder.send(TORNADO);
+    await fake.settle();
+
+    assert.equal(thrown, true);
+    assert.deepEqual(fake.texts(), [], "the faulting alert should not have been sent");
+
+    // The process is still here, and the next alert gets through
+    decoder.send("ZCZC-WXR-SVR-023005+0100-1232215-KGYX/NWS-");
+
+    assert.match((await fake.waitForSends(1))[0].text, /Severe Thunderstorm Warning/);
+  });
+});
+
 describe("receiver health", () => {
   test("reports that no test has been seen yet", async () => {
     const { ask } = await setup();

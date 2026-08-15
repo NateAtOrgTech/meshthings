@@ -72,25 +72,32 @@ function createSpawnSource({ command, args = [] }: SpawnSource, log: (message: s
   };
 }
 
-function formatExpiry(at: number, timeZone: string) {
-  return new Intl.DateTimeFormat("en-GB", {
-    timeZone,
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).format(new Date(at));
+// Built once and validated at startup. Intl throws RangeError on an unknown
+// zone, and the only place that would surface is inside the decoder's stdout
+// callback, where a throw is an uncaught exception -- so an unnoticed typo in
+// TIME_ZONE would kill the node at the moment the first real alert arrived.
+function createTimeFormatter(timeZone: string) {
+  let formatter: Intl.DateTimeFormat;
+
+  try {
+    formatter = new Intl.DateTimeFormat("en-GB", { timeZone, hour: "2-digit", minute: "2-digit", hour12: false });
+  } catch (error) {
+    throw new Error(
+      `alerts: "${timeZone}" is not a valid IANA time zone (${(error as Error).message}). ` +
+        "Expected something like America/New_York.",
+    );
+  }
+
+  return (at: number) => formatter.format(new Date(at));
 }
 
 // The header gives codes, not prose, so the mesh message is assembled rather
 // than summarised -- which is why it fits a packet comfortably.
-function formatAlert(alert: SameMessage, areaNames: Record<string, string>, timeZone: string) {
+function formatAlert(alert: SameMessage, areaNames: Record<string, string>, formatTime: (at: number) => string) {
   const names = alert.areas.map((area) => areaNames[area] ?? areaNames[area.slice(-5)] ?? area);
   const areas = truncateBytes(names.join(", "), MAX_AREA_BYTES);
 
-  return truncateBytes(
-    `${alert.eventName}: ${areas} until ${formatExpiry(alert.expiresAt, timeZone)}`,
-    MAX_TEXT_BYTES,
-  );
+  return truncateBytes(`${alert.eventName}: ${areas} until ${formatTime(alert.expiresAt)}`, MAX_TEXT_BYTES);
 }
 
 const alertsModule: MeshThingModule<AlertsConfig> = {
@@ -103,6 +110,7 @@ const alertsModule: MeshThingModule<AlertsConfig> = {
     const areaNames = config?.areaNames ?? {};
     const now = config?.now ?? (() => Date.now());
     const testIntervalDays = config?.testIntervalDays ?? DEFAULT_TEST_INTERVAL_DAYS;
+    const formatTime = createTimeFormatter(timeZone);
 
     const db = openDatabase(config?.database ?? "alerts.db");
     const subscribers = createSubscribers(db, topic);
@@ -119,9 +127,9 @@ const alertsModule: MeshThingModule<AlertsConfig> = {
     const pruneSeen = db.prepare("DELETE FROM seen_alerts WHERE expires_at <= ?");
 
     const recent: SameMessage[] = [];
-    const health = { lastLineAt: 0, lastTestAt: 0, lastAlertAt: 0, decoded: 0, broadcast: 0, suppressed: 0 };
+    const health = { lastLineAt: 0, lastTestAt: 0, lastAlertAt: 0, decoded: 0, broadcast: 0, suppressed: 0, errors: 0 };
 
-    function handleLine(line: string) {
+    function decodeAndRelay(line: string) {
       health.lastLineAt = now();
 
       const alert = parseSame(line, now());
@@ -165,12 +173,24 @@ const alertsModule: MeshThingModule<AlertsConfig> = {
         return;
       }
 
-      const sent = sendMany(formatAlert(alert, areaNames, timeZone), recipients, {
+      const sent = sendMany(formatAlert(alert, areaNames, formatTime), recipients, {
         priority: alert.isImmediate ? "high" : "normal",
       });
 
       health.broadcast += sent;
       log(`${alert.event} sent to ${sent} of ${recipients.length} subscribers`);
+    }
+
+    // The decoder feeds us from a child-process callback, where an exception is
+    // uncaught and fatal. One malformed line, or one unforeseen fault in the
+    // relay path, must cost one alert rather than every alert after it.
+    function handleLine(line: string) {
+      try {
+        decodeAndRelay(line);
+      } catch (error) {
+        health.errors++;
+        log(`failed to relay a decoded line: ${error}`);
+      }
     }
 
     let source: AlertSource | undefined;
@@ -189,7 +209,7 @@ const alertsModule: MeshThingModule<AlertsConfig> = {
       }
 
       const lines = recent.map(
-        (alert) => `${alert.eventName} ${formatExpiry(alert.issuedAt, timeZone)}`,
+        (alert) => `${alert.eventName} ${formatTime(alert.issuedAt)}`,
       );
 
       return paginate(lines, parsePage(args), "alerts");
