@@ -21,9 +21,9 @@ export type {
   Stats,
 } from "./meshthing.js";
 
-export { createMeshThing, MAX_TEXT_BYTES } from "./meshthing.js";
+export { createMeshThing } from "./meshthing.js";
 
-export { byteLength, paginate, parsePage, truncateBytes } from "./meshthing.js";
+export { byteLength, paginate, parsePage, truncateBytes, MAX_TEXT_BYTES } from "./text.js";
 
 export type { DatabaseHandle } from "./db.js";
 

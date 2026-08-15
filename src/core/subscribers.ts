@@ -1,5 +1,6 @@
 import { DatabaseHandle, openDatabase } from "./db.js";
-import { byteLength, Command, CommandContext, truncateBytes } from "./meshthing.js";
+import { Command, CommandContext} from "./meshthing.js";
+import { byteLength, truncateBytes} from "./text.js";
 
 // Nodes that asked to be sent something unprompted. The directory's listings and
 // an alert app's recipient list are the same shape, so they share this.

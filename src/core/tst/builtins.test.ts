@@ -1,7 +1,8 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 
-import { createMeshThing, MAX_TEXT_BYTES, MeshThingModule, MeshThingOptions, ModuleSpec } from "../meshthing.js";
+import { createMeshThing, MeshThingModule, MeshThingOptions, ModuleSpec} from "../meshthing.js";
+import { MAX_TEXT_BYTES} from "../text.js";
 import { createMockDevice } from "../../testing/index.js";
 
 const START = Date.UTC(2024, 4, 2, 12, 0);

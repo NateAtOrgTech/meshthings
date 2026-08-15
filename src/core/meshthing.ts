@@ -1,11 +1,10 @@
 import { MeshDevice, Protobuf, Types } from "@meshtastic/core";
 import { TransportNodeSerial } from "@meshtastic/transport-node-serial";
 
+import { byteLength, MAX_TEXT_BYTES, paginate, parsePage, truncateBytes } from "./text.js";
+
 const HEARTBEAT_INTERVAL_S = 5 * 60 * 1000; // 5 minutes
 
-// A meshtastic text payload tops out around 200 bytes. Stay under it with room
-// for the radio's own overhead.
-const MAX_TEXT_BYTES = 180;
 // Airtime is shared by everyone on the channel. Spacing transmissions keeps a
 // fan-out to many subscribers from jamming the mesh at the worst moment.
 const MIN_SEND_INTERVAL_MS = 4000;
@@ -116,76 +115,8 @@ type QueueItem = {
   options: SendOptions;
 };
 
-function byteLength(text: string) {
-  return Buffer.byteLength(text, "utf8");
-}
-
-const ELLIPSIS = "…";
-
-// Clamp on a character boundary so we never emit a split codepoint. The budget
-// covers the ellipsis too -- it is three bytes in UTF-8, not one.
-function truncateBytes(text: string, budget: number) {
-  if (byteLength(text) <= budget) {
-    return text;
-  }
-
-  const allowance = budget - byteLength(ELLIPSIS);
-  let result = "";
-
-  for (const character of text) {
-    if (byteLength(result + character) > allowance) {
-      break;
-    }
-    result += character;
-  }
-
-  return result + ELLIPSIS;
-}
-
 function delay(milliseconds: number) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
-}
-
-// Pack lines into whichever page was asked for. Any listing longer than a
-// couple of entries outgrows a single packet, so this is shared rather than
-// reimplemented per module.
-function paginate(lines: string[], page: number, moreCommand: string, budget = MAX_TEXT_BYTES) {
-  if (lines.length === 0) {
-    return "";
-  }
-
-  const perPage = budget - 28; // reserve room for the "(1/3) more" footer
-  const pages: string[][] = [];
-  let current: string[] = [];
-  let size = 0;
-
-  lines.forEach((line) => {
-    const cost = byteLength(line) + 1; // newline
-
-    if (current.length > 0 && size + cost > perPage) {
-      pages.push(current);
-      current = [];
-      size = 0;
-    }
-
-    current.push(line);
-    size += cost;
-  });
-
-  if (current.length > 0) {
-    pages.push(current);
-  }
-
-  const index = Math.min(Math.max(page, 1), pages.length) - 1;
-  const body = pages[index].join("\n");
-
-  if (pages.length === 1) {
-    return body;
-  }
-
-  const next = index + 2 <= pages.length ? ` ${moreCommand} ${index + 2}` : "";
-
-  return `${body}\n(${index + 1}/${pages.length})${next}`;
 }
 
 function formatDuration(milliseconds: number) {
@@ -203,12 +134,6 @@ function formatDuration(milliseconds: number) {
   }
 
   return minutes > 0 ? `${minutes}m` : `${seconds}s`;
-}
-
-function parsePage(args: string[]) {
-  const page = Number.parseInt(args[0] ?? "1", 10);
-
-  return Number.isFinite(page) ? page : 1;
 }
 
 function normalizeSpec<Config>(spec: ModuleSpec<Config>) {
@@ -612,4 +537,4 @@ export type {
   Stats,
 };
 
-export { createMeshThing, byteLength, truncateBytes, paginate, parsePage, MAX_TEXT_BYTES };
+export { createMeshThing };
