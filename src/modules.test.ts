@@ -1,8 +1,8 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 
-import { createMeshThing, MeshThingModule, ModuleSpec } from "./meshthing";
-import { createFakeDevice } from "./testing";
+import { createMeshThing, MeshThingModule, ModuleSpec } from "./meshthing.js";
+import { createFakeDevice } from "./testing.js";
 
 function moduleNamed(name: string, words: string[], reply = name): MeshThingModule {
   return {

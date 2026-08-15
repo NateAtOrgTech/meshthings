@@ -1,9 +1,9 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 
-import { createMeshThing, MAX_TEXT_BYTES } from "./meshthing";
-import { createSubscribers, subscriptionCommands, SubscriptionCommandOptions } from "./subscribers";
-import { createFakeDevice } from "./testing";
+import { createMeshThing, MAX_TEXT_BYTES } from "./meshthing.js";
+import { createSubscribers, subscriptionCommands, SubscriptionCommandOptions } from "./subscribers.js";
+import { createFakeDevice } from "./testing.js";
 
 function store() {
   return createSubscribers(":memory:");

@@ -1,6 +1,6 @@
 import dgram from "dgram";
 
-import { MeshThingModule } from "../../meshthing";
+import { MeshThingModule } from "../../meshthing.js";
 
 const DEFAULT_PORT = 41234;
 // A Tempest broadcasts every minute; well past that and we are reporting fiction

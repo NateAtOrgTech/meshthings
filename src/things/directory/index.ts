@@ -1,4 +1,4 @@
-import { DatabaseHandle, openDatabase } from "../../db";
+import { DatabaseHandle, openDatabase } from "../../db.js";
 import {
   byteLength,
   CommandContext,
@@ -8,7 +8,7 @@ import {
   paginate,
   parsePage,
   truncateBytes,
-} from "../../meshthing";
+} from "../../meshthing.js";
 
 const MAX_REPLY_BYTES = MAX_TEXT_BYTES;
 const MAX_NAME_BYTES = 24;

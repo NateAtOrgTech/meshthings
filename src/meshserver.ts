@@ -1,7 +1,7 @@
 import express, { Request, Response } from "express";
 import { createRequire } from "node:module";
 
-import { CommandMap, createMeshThing, MeshThingOptions, ModuleSpec } from "./meshthing";
+import { CommandMap, createMeshThing, MeshThingOptions, ModuleSpec } from "./meshthing.js";
 
 // Reported by the `sys` command, so an operator can tell what is deployed
 const { version } = createRequire(import.meta.url)("../package.json");

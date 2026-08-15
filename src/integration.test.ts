@@ -2,12 +2,12 @@ import { test, describe, after } from "node:test";
 import assert from "node:assert/strict";
 import dgram from "dgram";
 
-import { alertsModule } from "./things/alerts/index";
-import { openDatabase } from "./db";
-import { directoryModule } from "./things/directory/index";
-import { createMeshThing, MAX_TEXT_BYTES, MeshThing } from "./meshthing";
-import { createFakeDevice } from "./testing";
-import { weatherModule } from "./things/weather/index";
+import { alertsModule } from "./things/alerts/index.js";
+import { openDatabase } from "./db.js";
+import { directoryModule } from "./things/directory/index.js";
+import { createMeshThing, MAX_TEXT_BYTES, MeshThing } from "./meshthing.js";
+import { createFakeDevice } from "./testing.js";
+import { weatherModule } from "./things/weather/index.js";
 
 // The deployment shape: every meshthing on one radio, one database
 const running: MeshThing[] = [];
