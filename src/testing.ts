@@ -121,8 +121,11 @@ function createFakeDevice(options: FakeDeviceOptions = {}) {
       return sent.map((message) => message.text);
     },
 
-    // Resolve once `count` messages have gone out, so tests don't guess at sleeps
-    async waitForSends(count: number, timeoutMs = 2000) {
+    // Resolve once `count` messages have gone out, so tests don't guess at sleeps.
+    // Sits just under the runner's own --test-timeout: low enough to still
+    // report which sends were seen, high enough that a machine busy running
+    // several test files never turns starvation into a spurious failure.
+    async waitForSends(count: number, timeoutMs = 25000) {
       const deadline = Date.now() + timeoutMs;
 
       while (sent.length < count) {
