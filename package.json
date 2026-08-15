@@ -5,12 +5,14 @@
   "scripts": {
     "dev": "tsx watch ./src/index.ts",
     "start": "node dist/index.js",
-    "build": "tsc"
+    "build": "tsc",
+    "test": "node --import tsx --test --test-timeout=30000 \"src/**/*.test.ts\""
   },
   "author": "",
   "license": "ISC",
   "description": "",
   "devDependencies": {
+    "@types/better-sqlite3": "^9.6.0",
     "@types/node": "^25.3.2",
     "nodemon": "^3.1.11",
     "ts-node": "^10.9.2",
