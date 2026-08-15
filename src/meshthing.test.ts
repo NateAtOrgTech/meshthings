@@ -84,7 +84,8 @@ describe("command routing", () => {
 
     fake.receive("nonsense");
 
-    assert.equal((await fake.waitForSends(1))[0].text, "echo");
+    // Lists the app's own commands alongside the core built-ins
+    assert.match((await fake.waitForSends(1))[0].text, /echo/);
   });
 
   test("stays silent on an unknown command when onUnknown declines to reply", async () => {

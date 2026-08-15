@@ -226,10 +226,11 @@ describe("aggregated help", () => {
     assert.equal(await ask("help"), "my own help");
   });
 
-  test("reports having nothing to offer", async () => {
+  test("still offers the built-ins when no modules are mounted", async () => {
     const { ask } = await mount([]);
 
-    assert.equal(await ask("anything"), "No commands available");
+    // A node with nothing mounted can still be checked for life
+    assert.match(await ask("anything"), /core: help/);
   });
 });
 

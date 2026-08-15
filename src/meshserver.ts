@@ -1,9 +1,14 @@
 import express, { Request, Response } from "express";
-import { CommandMap, createMeshThing, ModuleSpec } from "./meshthing";
+import { createRequire } from "node:module";
 
-async function start(deviceString: string, source: CommandMap | ModuleSpec[]) {
+import { CommandMap, createMeshThing, MeshThingOptions, ModuleSpec } from "./meshthing";
+
+// Reported by the `sys` command, so an operator can tell what is deployed
+const { version } = createRequire(import.meta.url)("../package.json");
+
+async function start(deviceString: string, source: CommandMap | ModuleSpec[], options: MeshThingOptions = {}) {
   // Configure and run the meshtastic device
-  const meshThing = createMeshThing();
+  const meshThing = createMeshThing({ version, ...options });
   await meshThing.configureAndListen(deviceString, source);
 
   // Setup and start the web server

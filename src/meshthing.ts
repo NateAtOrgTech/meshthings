@@ -93,9 +93,14 @@ type MeshThingOptions = {
   maxTextBytes?: number;
   // Reply to a command nobody claims. Defaults to the aggregated help.
   onUnknown?: CommandHandler;
+  // Reported by the `sys` command
+  version?: string;
+  now?: () => number;
 };
 
 type Stats = {
+  startedAt: number;
+  uptimeMs: number;
   lastSent: string;
   lastCommand: string;
   handled: number;
@@ -183,6 +188,23 @@ function paginate(lines: string[], page: number, moreCommand: string, budget = M
   return `${body}\n(${index + 1}/${pages.length})${next}`;
 }
 
+function formatDuration(milliseconds: number) {
+  const seconds = Math.floor(milliseconds / 1000);
+  const days = Math.floor(seconds / 86400);
+  const hours = Math.floor((seconds % 86400) / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+
+  if (days > 0) {
+    return `${days}d ${hours}h`;
+  }
+
+  if (hours > 0) {
+    return `${hours}h ${minutes}m`;
+  }
+
+  return minutes > 0 ? `${minutes}m` : `${seconds}s`;
+}
+
 function parsePage(args: string[]) {
   const page = Number.parseInt(args[0] ?? "1", 10);
 
@@ -203,13 +225,18 @@ function createMeshThing(options: MeshThingOptions = {}) {
   const handlers = new Map<string, CommandHandler>();
   const commandOwners = new Map<string, string>();
   const helpSummaries: { name: string; words: string[] }[] = [];
-  const mountedModules: { name: string; mounted: MountedModule }[] = [];
+  const mountedModules: { name: string; description: string; mounted: MountedModule }[] = [];
   let defaultHandler: CommandHandler | undefined;
   let queue: QueueItem[] = [];
   let pumping = false;
   let stopped = false;
   let lastSentAt = 0;
+  const version = options.version ?? "dev";
+  const now = options.now ?? (() => Date.now());
+  const startedAt = now();
   let stats: Stats = {
+    startedAt,
+    uptimeMs: 0,
     lastSent: "",
     lastCommand: "",
     handled: 0,
@@ -236,7 +263,7 @@ function createMeshThing(options: MeshThingOptions = {}) {
       mountCommandMap(source);
     }
 
-    registerHelp();
+    registerBuiltins();
 
     device.events.onMessagePacket.subscribe(messageHandler);
     console.log("Event registration complete");
@@ -267,7 +294,7 @@ function createMeshThing(options: MeshThingOptions = {}) {
       });
 
       registerCommands(name, spec, mounted.commands);
-      mountedModules.push({ name, mounted });
+      mountedModules.push({ name, description: spec.module.description, mounted });
     }
   }
 
@@ -324,18 +351,73 @@ function createMeshThing(options: MeshThingOptions = {}) {
     return paginate(lines, parsePage(args), "help", maxTextBytes);
   }
 
-  function registerHelp() {
+  // Is the node up, and is it healthy? One reserved word with subcommands
+  // rather than several, to keep the collision surface as small as possible.
+  function systemHandler(args: string[]) {
+    const subcommand = (args[0] ?? "").toLocaleLowerCase();
+    const current = getStats();
+
+    if (subcommand === "modules") {
+      if (mountedModules.length === 0) {
+        return "No modules mounted";
+      }
+
+      const lines = mountedModules.map(({ name, description }) => truncateBytes(`${name}: ${description}`, 56));
+
+      return paginate(lines, parsePage(args.slice(1)), "sys modules", maxTextBytes);
+    }
+
+    if (subcommand === "stats") {
+      return (
+        `cmds ${current.handled}, err ${current.errors} | ` +
+        `sent ${current.sent}, drop ${current.dropped}, cut ${current.truncated} | ` +
+        `queue ${current.queued}`
+      );
+    }
+
+    return (
+      `meshthings ${version} | up ${formatDuration(current.uptimeMs)} | ` +
+      `${mountedModules.length} modules | ${current.handled} cmds | ${current.sent} sent`
+    );
+  }
+
+  // Registered only if no module claimed the word. A built-in is a convenience;
+  // it must never stop a deployment from starting.
+  function claimIfFree(words: string[], handler: CommandHandler) {
+    const claimed: string[] = [];
+
+    words.forEach((word) => {
+      const key = word.toLocaleLowerCase();
+      const owner = commandOwners.get(key);
+
+      if (owner) {
+        console.warn(`Built-in "${word}" not registered: already claimed by "${owner}"`);
+
+        return;
+      }
+
+      commandOwners.set(key, "core");
+      handlers.set(key, handler);
+      claimed.push(word);
+    });
+
+    return claimed;
+  }
+
+  function registerBuiltins() {
     if (!defaultHandler) {
       defaultHandler = options.onUnknown ?? helpHandler;
     }
 
-    // Only claim the obvious words if a module has not already taken them
-    ["help", "?"].forEach((word) => {
-      if (!commandOwners.has(word)) {
-        commandOwners.set(word, "core");
-        handlers.set(word, helpHandler);
-      }
-    });
+    const claimed = [
+      ...claimIfFree(["help", "?"], helpHandler),
+      ...claimIfFree(["ping"], () => "pong"),
+      ...claimIfFree(["sys"], systemHandler),
+    ];
+
+    if (claimed.length > 0) {
+      helpSummaries.push({ name: "core", words: claimed });
+    }
   }
 
   // Every outbound packet -- replies included -- goes through here, so nothing
@@ -444,6 +526,11 @@ function createMeshThing(options: MeshThingOptions = {}) {
 
     let result: string | void;
 
+    // Counted on dispatch rather than on success, so `sys` includes the
+    // command asking the question and a failure still shows as traffic
+    stats.handled++;
+    stats.lastCommand = command;
+
     try {
       result = await handler(tokens.slice(1), context);
     } catch (error) {
@@ -451,9 +538,6 @@ function createMeshThing(options: MeshThingOptions = {}) {
       console.error(`Command "${command}" failed:`, error);
       return;
     }
-
-    stats.handled++;
-    stats.lastCommand = command;
 
     // A handler that returns nothing has chosen not to reply
     if (!result) {
@@ -478,7 +562,7 @@ function createMeshThing(options: MeshThingOptions = {}) {
   }
 
   function getStats(): Stats {
-    return { ...stats, queued: queue.length };
+    return { ...stats, queued: queue.length, uptimeMs: now() - startedAt };
   }
 
   // Stop accepting and draining outbound traffic, and let modules release
