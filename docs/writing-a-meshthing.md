@@ -129,6 +129,8 @@ Every transmission is queued and spaced, including replies. You do not need to r
 sendMany(warningText, recipients, { priority: "high" });
 ```
 
+The core answers an unrecognised command once per node, then stays quiet for a few minutes. That is not politeness, it is a loop guard: another node running meshthings does not recognise your reply as a command either, so without it two nodes explain themselves to each other until one is switched off. Your own commands are not rate limited — but it is worth remembering that anything you send may be answered by a machine rather than read by a person.
+
 ### Command collisions
 
 Two things cannot claim the same word. If they do, startup throws and names both. That is deliberate: it is a deployment mistake, and discovering it when somebody sends the command is worse.

@@ -10,6 +10,13 @@ const HEARTBEAT_INTERVAL_S = 5 * 60 * 1000; // 5 minutes
 const MIN_SEND_INTERVAL_MS = 4000;
 // If the radio stalls, stop growing the queue rather than the heap
 const MAX_QUEUE_LENGTH = 100;
+// How long before the same node gets the unknown-command reply again. Two nodes
+// running this would otherwise answer each other's help text forever: neither
+// recognises the other's reply as a command, so each politely explains itself,
+// at one message per pacing interval, permanently.
+const UNKNOWN_REPLY_COOLDOWN_MS = 5 * 60 * 1000;
+// Bound the memory that cooldown tracking costs on a busy mesh
+const MAX_TRACKED_PEERS = 500;
 
 // Context about the message that triggered a command. Handlers need this to
 // answer differently per node, per channel, or to ignore a request entirely.
@@ -87,6 +94,9 @@ type MeshThingOptions = {
   maxTextBytes?: number;
   // Reply to a command nobody claims. Defaults to the aggregated help.
   onUnknown?: CommandHandler;
+  // How long before the same node gets that reply again. Zero answers every
+  // time, which will loop against another node running this.
+  unknownReplyCooldownMs?: number;
   // Reported by the `sys` command
   version?: string;
   // Drives the reported clock -- uptime and the last-seen timestamps -- and
@@ -153,6 +163,7 @@ function createMeshThing(options: MeshThingOptions = {}) {
   const minSendIntervalMs = options.minSendIntervalMs ?? MIN_SEND_INTERVAL_MS;
   const maxQueueLength = options.maxQueueLength ?? MAX_QUEUE_LENGTH;
   const maxTextBytes = options.maxTextBytes ?? MAX_TEXT_BYTES;
+  const unknownReplyCooldownMs = options.unknownReplyCooldownMs ?? UNKNOWN_REPLY_COOLDOWN_MS;
 
   let meshDevice: MeshDevice | undefined;
   let myNodeInfo: Protobuf.Mesh.MyNodeInfo | undefined;
@@ -161,6 +172,7 @@ function createMeshThing(options: MeshThingOptions = {}) {
   const helpSummaries: { name: string; words: string[] }[] = [];
   const mountedModules: { name: string; description: string; mounted: MountedModule }[] = [];
   let defaultHandler: CommandHandler | undefined;
+  const lastUnknownReplyAt = new Map<number, number>();
   let queue: QueueItem[] = [];
   let pumping = false;
   let stopped = false;
@@ -457,9 +469,17 @@ function createMeshThing(options: MeshThingOptions = {}) {
 
     const tokens: string[] = messagePacket.data.split(" ").filter((token: string) => token.length > 0);
     const command = tokens[0] ?? "";
-    const handler = handlers.get(command.toLocaleLowerCase()) ?? defaultHandler;
+    const claimed = handlers.get(command.toLocaleLowerCase());
+    const handler = claimed ?? defaultHandler;
 
     if (!handler) {
+      return;
+    }
+
+    // Only the unknown-command reply is rate limited, and only per node. It is
+    // the one handler that answers anything, which is what makes it loop; real
+    // commands stay as responsive as they were.
+    if (!claimed && !mayAnswerUnknown(messagePacket.from)) {
       return;
     }
 
@@ -492,6 +512,35 @@ function createMeshThing(options: MeshThingOptions = {}) {
     }
 
     send(result, { to: messagePacket.from, channel: messagePacket.channel });
+  }
+
+  // True at most once per cooldown per node, and records the answer as it goes
+  function mayAnswerUnknown(nodeNum: number) {
+    const at = Date.now();
+
+    if (unknownReplyCooldownMs > 0) {
+      const last = lastUnknownReplyAt.get(nodeNum);
+
+      if (last !== undefined && at - last < unknownReplyCooldownMs) {
+        return false;
+      }
+    }
+
+    // Re-inserted rather than updated so the map stays in least-recent order
+    lastUnknownReplyAt.delete(nodeNum);
+    lastUnknownReplyAt.set(nodeNum, at);
+
+    while (lastUnknownReplyAt.size > MAX_TRACKED_PEERS) {
+      const oldest = lastUnknownReplyAt.keys().next().value;
+
+      if (oldest === undefined) {
+        break;
+      }
+
+      lastUnknownReplyAt.delete(oldest);
+    }
+
+    return true;
   }
 
   async function configureAndListen(deviceString: string, modules: ModuleSpec[]) {
