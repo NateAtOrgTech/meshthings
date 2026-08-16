@@ -110,6 +110,43 @@ describe("registration", () => {
     assert.ok(listing.includes("currents"));
   });
 
+  test("rejects a name with characters that are unsafe to render", async () => {
+    const { ask } = await setup();
+
+    // A newline inside a token survives tokenisation, and would forge an extra
+    // line in every future listing
+    assert.match(await ask("register tides\nbogus Tide times"), /may only contain/);
+    assert.match(await ask("register tides! Tide times"), /may only contain/);
+    assert.match(await ask("register ti/des Tide times"), /may only contain/);
+  });
+
+  test("rejects a description containing control characters", async () => {
+    const { ask } = await setup();
+
+    // Would render as a second entry, or as a convincing pagination footer
+    assert.match(await ask("register tides Tide times\ncurrents - Current times"), /line breaks/);
+    assert.match(await ask("register tides Tide times\u0007bell"), /control characters/);
+  });
+
+  test("still accepts ordinary names and descriptions", async () => {
+    const { ask } = await setup();
+
+    assert.match(await ask("register river-gauge Presumpscot river levels", 111), /Registered/);
+    assert.match(await ask("register wx_1 Live temp, wind and rain (Tempest)", 222), /Registered/);
+  });
+
+  test("keeps forged text out of the listing entirely", async () => {
+    const { ask } = await setup();
+
+    await ask("register real Genuine service", 111);
+    await ask("register fake Something\n(1/9) services 2", 222);
+
+    const listing = await ask("services");
+
+    assert.ok(!listing.includes("(1/9)"), `forged footer reached the listing: ${listing}`);
+    assert.ok(!listing.includes("fake"), `rejected registration was stored: ${listing}`);
+  });
+
   test("rejects an overlong name", async () => {
     const { ask } = await setup();
 
