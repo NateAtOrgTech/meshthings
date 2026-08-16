@@ -163,6 +163,31 @@ describe("weather module", () => {
     assert.match(await ask("t"), /18\.5°C \/ 65\.3°F \(\d+m old\)/);
   });
 
+  test("accepts observations from any host when no station address is set", async () => {
+    const { ask, broadcast } = await setup();
+
+    await broadcast({ type: "obs_st", obs: [[0, 0, 0, 0, 0, 0, 0, 18.5]] });
+
+    assert.equal(await ask("t"), "18.5°C / 65.3°F");
+  });
+
+  test("ignores observations from anywhere but the configured station", async () => {
+    // Sent from loopback, so anything else is a mismatch
+    const { ask, broadcast } = await setup({ stationAddress: "10.9.9.9" });
+
+    await broadcast({ type: "obs_st", obs: [[0, 0, 0, 0, 0, 0, 0, 18.5]] });
+
+    assert.match(await ask("t"), /No reading/);
+  });
+
+  test("accepts observations from the configured station", async () => {
+    const { ask, broadcast } = await setup({ stationAddress: "127.0.0.1" });
+
+    await broadcast({ type: "obs_st", obs: [[0, 0, 0, 0, 0, 0, 0, 18.5]] });
+
+    assert.equal(await ask("t"), "18.5°C / 65.3°F");
+  });
+
   test("releases the port when stopped", async () => {
     const { thing } = await setup();
 

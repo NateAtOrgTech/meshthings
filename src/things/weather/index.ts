@@ -11,6 +11,10 @@ type WeatherConfig = {
   port?: number;
   // How old a reading may be before it is reported as stale
   staleAfterMs?: number;
+  // Only accept observations from this address. Unset accepts any host on the
+  // network, which is what the station itself needs on day one -- the log
+  // reports where readings are arriving from so this can be filled in.
+  stationAddress?: string;
 };
 
 const weatherModule: MeshThingModule<WeatherConfig> = {
@@ -27,8 +31,14 @@ const weatherModule: MeshThingModule<WeatherConfig> = {
       lastUpdated: 0,
     };
 
+    const stationAddress = config?.stationAddress;
     const server = dgram.createSocket("udp4");
+    const seenSources = new Set<string>();
     let closed = false;
+
+    if (!stationAddress) {
+      log("accepting observations from any host on the network; set stationAddress once the log shows where they arrive from");
+    }
 
     server.on("error", (error: Error) => {
       log(`socket error: ${error.message}`);
@@ -39,7 +49,18 @@ const weatherModule: MeshThingModule<WeatherConfig> = {
       }
     });
 
-    server.on("message", (message) => {
+    server.on("message", (message, source) => {
+      if (stationAddress && source.address !== stationAddress) {
+        // Once per address, or a spoofer could fill the log as easily as the
+        // readings it is trying to fake
+        if (!seenSources.has(source.address)) {
+          seenSources.add(source.address);
+          log(`ignoring observations from ${source.address}: stationAddress is ${stationAddress}`);
+        }
+
+        return;
+      }
+
       try {
         const parsed = JSON.parse(message.toString());
 
@@ -59,6 +80,11 @@ const weatherModule: MeshThingModule<WeatherConfig> = {
           log(`ignored an observation with no usable temperature: ${JSON.stringify(celsius)}`);
 
           return;
+        }
+
+        if (!seenSources.has(source.address)) {
+          seenSources.add(source.address);
+          log(`observations arriving from ${source.address}`);
         }
 
         data.temperatureC = celsius;
