@@ -28,8 +28,8 @@ export type { DatabaseHandle } from "./db.js";
 
 export { closeDatabase, openDatabase } from "./db.js";
 
-export type { SubscribeOptions, Subscribers, Subscription, SubscriptionCommandOptions } from "./subscribers.js";
+export type { Subscribers, Subscription, SubscriptionCommandOptions } from "./subscribers.js";
 
-export { createSubscribers, subscriptionCommands, DEFAULT_TOPIC, MAX_FILTER_BYTES } from "./subscribers.js";
+export { createSubscribers, subscriptionCommands, unsubscribeEverywhere, MAX_FILTER_BYTES } from "./subscribers.js";
 
 export type { MeshthingsConfig } from "./config.js";

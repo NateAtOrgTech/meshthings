@@ -170,7 +170,7 @@ const alertsModule: MeshThingModule<AlertsConfig> = {
       recent.splice(RECENT_ALERTS_KEPT);
 
       // A subscriber with no filter wants everything
-      const recipients = subscribers.matching(topic, (filter) =>
+      const recipients = subscribers.matching((filter) =>
         filter === null ? true : areaMatches(alert.areas, filter.split(/\s+/)),
       );
 
@@ -245,18 +245,17 @@ const alertsModule: MeshThingModule<AlertsConfig> = {
       const counts = `${health.decoded} decoded, ${health.suppressed} suppressed, ${health.errors} errors`;
 
       if (!health.lastTestAt) {
-        return `No weekly test seen yet. ${subscribers.count(topic)} subscribers. ${counts}.`;
+        return `No weekly test seen yet. ${subscribers.count()} subscribers. ${counts}.`;
       }
 
       const days = Math.floor((now() - health.lastTestAt) / (24 * 60 * 60 * 1000));
       const state = days > testIntervalDays ? "STALE" : "ok";
 
-      return `Receiver ${state}: last test ${days}d ago. ${subscribers.count(topic)} subscribers. ${counts}.`;
+      return `Receiver ${state}: last test ${days}d ago. ${subscribers.count()} subscribers. ${counts}.`;
     }
 
     const commands: Command[] = [
       ...subscriptionCommands(subscribers, {
-        topic,
         label: "weather alerts",
         validateFilter: (filter) =>
           /^\d{5,6}( \d{5,6})*$/.test(filter) ? undefined : "Filter must be FIPS county codes, e.g. 023005",

@@ -19,7 +19,7 @@ That is genuinely rare for something worth packaging, and common for commands a 
 ## The shape
 
 ```ts
-import { MeshThingModule } from "../../meshthing.js";
+import { MeshThingModule } from "../../core/index.js";
 
 type TidesConfig = {
   station?: string;
@@ -108,7 +108,7 @@ A Meshtastic text payload is around 200 bytes; the core truncates at 180 and log
 For anything list-shaped, paginate:
 
 ```ts
-import { paginate, parsePage, truncateBytes } from "../../meshthing.js";
+import { paginate, parsePage, truncateBytes } from "../../core/index.js";
 
 function services(args: string[]) {
   const lines = rows.map((row) => truncateBytes(`${row.name} - ${row.description}`, 56));
@@ -142,7 +142,7 @@ Pick specific words. `status`, `info`, `list`, and `test` are the ones everyone 
 Use `openDatabase`, which accepts a path or an existing handle, so several things can share one file:
 
 ```ts
-import { openDatabase } from "../../db.js";
+import { openDatabase } from "../../core/index.js";
 
 const db = openDatabase(config?.database ?? "mesh.db");
 
@@ -156,17 +156,19 @@ Do not construct `DatabaseSync` yourself. `node:sqlite` finalizes a database's p
 If your thing pushes to people who asked for it, use the shared registry rather than building your own:
 
 ```ts
-import { createSubscribers, subscriptionCommands } from "../../subscribers.js";
+import { createSubscribers, subscriptionCommands } from "../../core/index.js";
 
 const subscribers = createSubscribers(db, "tides");
 
 const commands = [
-  ...subscriptionCommands(subscribers, { topic: "tides", label: "tide times" }),
+  ...subscriptionCommands(subscribers, { label: "tide times" }),
 ];
 
 // later
-sendMany("High 14:05", subscribers.nodes("tides"));
+sendMany("High 14:05", subscribers.nodes());
 ```
+
+A store is scoped to the topic you create it with, and nothing takes a topic after that — not the commands, not `nodes()`, not `count()`. That is deliberate: when both the store and its commands defaulted their own topic, the two could disagree, and subscriptions went somewhere nothing read. Users got a cheerful confirmation and were never sent anything. Serving two topics means two stores over the same database handle.
 
 `subscriptionCommands` gives you `subscribe`, `unsubscribe`, and `status` for free, with configurable words and a `validateFilter` hook. `matching()` selects only subscribers whose stored filter accepts an event.
 
@@ -188,8 +190,8 @@ modules: [
 Tests go in your thing's own `tst/` folder — `src/things/tides/tst/tides.test.ts`. `createMockDevice()` stands in for hardware. It records what was transmitted, injects inbound messages, and lets you assert on ordering and timing.
 
 ```ts
-import { createMeshThing } from "../../../meshthing.js";
-import { createMockDevice } from "../../../mockMeshtasticDevice.js";
+import { createMeshThing } from "../../../core/index.js";
+import { createMockDevice } from "../../../testing/index.js";
 import { tidesModule } from "../index.js";
 
 const mock = createMockDevice();

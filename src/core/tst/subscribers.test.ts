@@ -3,21 +3,22 @@ import assert from "node:assert/strict";
 
 import { commandsModule, createMeshThing } from "../meshthing.js";
 import { MAX_TEXT_BYTES } from "../text.js";
-import { createSubscribers, subscriptionCommands, SubscriptionCommandOptions } from "../subscribers.js";
+import { openDatabase } from "../db.js";
+import { createSubscribers, subscriptionCommands, SubscriptionCommandOptions, unsubscribeEverywhere } from "../subscribers.js";
 import { createMockDevice } from "../../testing/index.js";
 
-function store() {
-  return createSubscribers(":memory:");
+function store(topic = "alerts") {
+  return createSubscribers(":memory:", topic);
 }
 
 describe("subscription store", () => {
-  test("records a subscription", () => {
+  test("records a subscription against its own topic", () => {
     const subscribers = store();
 
     const subscription = subscribers.subscribe(111);
 
     assert.equal(subscription.nodeNum, 111);
-    assert.equal(subscription.topic, "default");
+    assert.equal(subscription.topic, "alerts");
     assert.equal(subscription.filter, null);
     assert.ok(subscribers.isSubscribed(111));
   });
@@ -29,7 +30,7 @@ describe("subscription store", () => {
     assert.equal(subscribers.get(111), undefined);
   });
 
-  test("is idempotent for the same node and topic", () => {
+  test("is idempotent for the same node", () => {
     const subscribers = store();
 
     subscribers.subscribe(111);
@@ -41,8 +42,8 @@ describe("subscription store", () => {
   test("updates the filter when a node resubscribes", () => {
     const subscribers = store();
 
-    subscribers.subscribe(111, { filter: "023005" });
-    subscribers.subscribe(111, { filter: "023031" });
+    subscribers.subscribe(111, "023005");
+    subscribers.subscribe(111, "023031");
 
     assert.equal(subscribers.count(), 1);
     assert.equal(subscribers.get(111)?.filter, "023031");
@@ -51,13 +52,13 @@ describe("subscription store", () => {
   test("keeps the original timestamp across a resubscribe", async () => {
     const subscribers = store();
 
-    const first = subscribers.subscribe(111, { filter: "a" });
+    const first = subscribers.subscribe(111, "a");
 
     // Without the wait both calls land in the same millisecond and this passes
     // whether or not created_at is preserved
     await new Promise((resolve) => setTimeout(resolve, 10));
 
-    const second = subscribers.subscribe(111, { filter: "b" });
+    const second = subscribers.subscribe(111, "b");
     // A node subscribing fresh after the wait proves the clock moved, without
     // asserting on timer precision
     const other = subscribers.subscribe(222);
@@ -69,7 +70,7 @@ describe("subscription store", () => {
   test("treats an empty or whitespace filter as none", () => {
     const subscribers = store();
 
-    subscribers.subscribe(111, { filter: "   " });
+    subscribers.subscribe(111, "   ");
 
     assert.equal(subscribers.get(111)?.filter, null);
   });
@@ -77,7 +78,7 @@ describe("subscription store", () => {
   test("truncates an overlong filter", () => {
     const subscribers = store();
 
-    subscribers.subscribe(111, { filter: "0".repeat(200) });
+    subscribers.subscribe(111, "0".repeat(200));
 
     assert.ok(Buffer.byteLength(subscribers.get(111)!.filter!, "utf8") <= 96);
   });
@@ -106,68 +107,69 @@ describe("subscription store", () => {
 
     assert.deepEqual(subscribers.nodes(), [222]);
   });
+
+  test("clears its own topic", () => {
+    const subscribers = store();
+
+    subscribers.subscribe(111);
+    subscribers.subscribe(222);
+
+    assert.equal(subscribers.clear(), 2);
+    assert.equal(subscribers.count(), 0);
+  });
 });
 
-describe("topics", () => {
-  test("keeps subscriptions on separate topics apart", () => {
-    const subscribers = store();
+describe("a store is scoped to one topic", () => {
+  test("cannot be talked into reading or writing another", () => {
+    const database = openDatabase(":memory:");
+    const alerts = createSubscribers(database, "alerts");
+    const tides = createSubscribers(database, "tides");
 
-    subscribers.subscribe(111, { topic: "alerts" });
-    subscribers.subscribe(111, { topic: "tides" });
+    alerts.subscribe(111);
 
-    assert.equal(subscribers.count("alerts"), 1);
-    assert.equal(subscribers.count("tides"), 1);
-    assert.deepEqual(subscribers.topics(), ["alerts", "tides"]);
+    // No method takes a topic, so there is nothing to pass wrongly
+    assert.equal(alerts.count(), 1);
+    assert.equal(tides.count(), 0);
+    assert.equal(tides.isSubscribed(111), false);
+    assert.equal(alerts.topic, "alerts");
   });
 
-  test("unsubscribes from one topic without touching the other", () => {
-    const subscribers = store();
+  test("lets one node hold separate subscriptions per topic", () => {
+    const database = openDatabase(":memory:");
+    const alerts = createSubscribers(database, "alerts");
+    const tides = createSubscribers(database, "tides");
 
-    subscribers.subscribe(111, { topic: "alerts" });
-    subscribers.subscribe(111, { topic: "tides" });
-    subscribers.unsubscribe(111, "alerts");
+    alerts.subscribe(111, "023005");
+    tides.subscribe(111);
 
-    assert.equal(subscribers.isSubscribed(111, "alerts"), false);
-    assert.equal(subscribers.isSubscribed(111, "tides"), true);
+    assert.equal(alerts.get(111)?.filter, "023005");
+    assert.equal(tides.get(111)?.filter, null);
+
+    alerts.unsubscribe(111);
+
+    assert.equal(alerts.isSubscribed(111), false);
+    assert.equal(tides.isSubscribed(111), true);
   });
 
-  test("drops a node from every topic at once", () => {
-    const subscribers = store();
+  test("matches its topic name case-insensitively", () => {
+    const database = openDatabase(":memory:");
 
-    subscribers.subscribe(111, { topic: "alerts" });
-    subscribers.subscribe(111, { topic: "tides" });
+    createSubscribers(database, "Alerts").subscribe(111);
 
-    assert.equal(subscribers.unsubscribeAll(111), 2);
-    assert.equal(subscribers.list().length, 0);
+    assert.ok(createSubscribers(database, "alerts").isSubscribed(111));
   });
 
-  test("matches topic names case-insensitively", () => {
-    const subscribers = store();
+  test("drops a node from every topic at once when asked explicitly", () => {
+    const database = openDatabase(":memory:");
+    const alerts = createSubscribers(database, "alerts");
+    const tides = createSubscribers(database, "tides");
 
-    subscribers.subscribe(111, { topic: "Alerts" });
+    alerts.subscribe(111);
+    tides.subscribe(111);
 
-    assert.ok(subscribers.isSubscribed(111, "alerts"));
-  });
-
-  test("lists every subscription when no topic is given", () => {
-    const subscribers = store();
-
-    subscribers.subscribe(111, { topic: "alerts" });
-    subscribers.subscribe(222, { topic: "tides" });
-
-    assert.equal(subscribers.list().length, 2);
-  });
-
-  test("clears one topic or all of them", () => {
-    const subscribers = store();
-
-    subscribers.subscribe(111, { topic: "alerts" });
-    subscribers.subscribe(222, { topic: "tides" });
-
-    assert.equal(subscribers.clear("alerts"), 1);
-    assert.equal(subscribers.list().length, 1);
-    assert.equal(subscribers.clear(), 1);
-    assert.equal(subscribers.list().length, 0);
+    assert.equal(unsubscribeEverywhere(database, 111), 2);
+    assert.equal(alerts.count(), 0);
+    assert.equal(tides.count(), 0);
   });
 });
 
@@ -185,12 +187,12 @@ describe("recipient selection", () => {
   test("selects only nodes whose filter matches", () => {
     const subscribers = store();
 
-    subscribers.subscribe(111, { topic: "alerts", filter: "023005" });
-    subscribers.subscribe(222, { topic: "alerts", filter: "023031" });
-    subscribers.subscribe(333, { topic: "alerts" });
+    subscribers.subscribe(111, "023005");
+    subscribers.subscribe(222, "023031");
+    subscribers.subscribe(333);
 
     // An unset filter means "send me everything"
-    const recipients = subscribers.matching("alerts", (filter) => filter === null || filter.includes("023005"));
+    const recipients = subscribers.matching((filter) => filter === null || filter.includes("023005"));
 
     assert.deepEqual(recipients, [111, 333]);
   });
@@ -200,12 +202,12 @@ describe("recipient selection", () => {
     const thing = createMeshThing({ minSendIntervalMs: 0 });
     const subscribers = store();
 
-    await thing.listen(fake.device, [commandsModule("subs", "subscription commands", [])]);
+    await thing.listen(fake.device, []);
 
-    subscribers.subscribe(111, { topic: "alerts", filter: "023005" });
-    subscribers.subscribe(222, { topic: "alerts", filter: "023031" });
+    subscribers.subscribe(111, "023005");
+    subscribers.subscribe(222, "023031");
 
-    const recipients = subscribers.matching("alerts", (filter) => filter!.includes("023005"));
+    const recipients = subscribers.matching((filter) => filter!.includes("023005"));
 
     thing.sendMany("TOR Cumberland until 21:45", recipients, { priority: "high" });
 
@@ -216,37 +218,13 @@ describe("recipient selection", () => {
   });
 });
 
-describe("shared database", () => {
-  test("lives alongside another module's tables in one file", () => {
-    const first = createSubscribers(":memory:");
-    // Reuse the same handle rather than opening a second database
-    const second = createSubscribers(first.db, "tides");
-
-    first.subscribe(111);
-    second.subscribe(222);
-
-    assert.equal(first.count(), 1);
-    assert.equal(second.count(), 1);
-    assert.equal(first.list().length, 2);
-  });
-
-  test("applies its own default topic", () => {
-    const subscribers = createSubscribers(":memory:", "alerts");
-
-    subscribers.subscribe(111);
-
-    assert.equal(subscribers.get(111)?.topic, "alerts");
-    assert.ok(subscribers.isSubscribed(111, "alerts"));
-  });
-});
-
 describe("on-mesh commands", () => {
-  async function setup(options: SubscriptionCommandOptions = {}) {
+  function setup(topic = "alerts", options: SubscriptionCommandOptions = {}) {
     const fake = createMockDevice();
     const thing = createMeshThing({ minSendIntervalMs: 0 });
-    const subscribers = createSubscribers(":memory:", options.topic ?? "default");
+    const subscribers = createSubscribers(":memory:", topic);
 
-    await thing.listen(fake.device, [
+    const mounted = thing.listen(fake.device, [
       commandsModule("subs", "subscription commands", subscriptionCommands(subscribers, options)),
     ]);
 
@@ -262,18 +240,36 @@ describe("on-mesh commands", () => {
       return reply;
     }
 
-    return { subscribers, ask };
+    return { subscribers, ask, ready: mounted };
   }
 
+  // The regression this whole reshaping is for: the commands used to default to
+  // their own topic, so a store created with a different one silently wrote
+  // subscriptions nowhere anything read them
+  test("writes to the store's topic, whatever it is", async () => {
+    const { subscribers, ask, ready } = setup("tides");
+
+    await ready;
+    await ask("subscribe", 4242);
+
+    assert.equal(subscribers.isSubscribed(4242), true);
+    assert.equal(subscribers.get(4242)?.topic, "tides");
+    assert.deepEqual(subscribers.nodes(), [4242]);
+  });
+
   test("subscribes the calling node", async () => {
-    const { subscribers, ask } = await setup();
+    const { subscribers, ask, ready } = setup();
+
+    await ready;
 
     assert.match(await ask("subscribe", 4242), /Subscribed to alerts/);
     assert.ok(subscribers.isSubscribed(4242));
   });
 
   test("records a filter supplied with the command", async () => {
-    const { subscribers, ask } = await setup();
+    const { subscribers, ask, ready } = setup();
+
+    await ready;
 
     const reply = await ask("subscribe 023005 023031", 4242);
 
@@ -282,8 +278,9 @@ describe("on-mesh commands", () => {
   });
 
   test("unsubscribes the calling node", async () => {
-    const { subscribers, ask } = await setup();
+    const { subscribers, ask, ready } = setup();
 
+    await ready;
     await ask("subscribe", 4242);
 
     assert.match(await ask("unsubscribe", 4242), /Unsubscribed/);
@@ -291,13 +288,17 @@ describe("on-mesh commands", () => {
   });
 
   test("says so when unsubscribing without a subscription", async () => {
-    const { ask } = await setup();
+    const { ask, ready } = setup();
+
+    await ready;
 
     assert.match(await ask("unsubscribe", 4242), /not subscribed/);
   });
 
   test("reports status both ways", async () => {
-    const { ask } = await setup();
+    const { ask, ready } = setup();
+
+    await ready;
 
     assert.match(await ask("status", 4242), /Not subscribed/);
 
@@ -310,8 +311,9 @@ describe("on-mesh commands", () => {
   });
 
   test("answers to its aliases", async () => {
-    const { subscribers, ask } = await setup();
+    const { subscribers, ask, ready } = setup();
 
+    await ready;
     await ask("sub", 4242);
 
     assert.ok(subscribers.isSubscribed(4242));
@@ -322,8 +324,9 @@ describe("on-mesh commands", () => {
   });
 
   test("keeps each node's subscription separate", async () => {
-    const { subscribers, ask } = await setup();
+    const { subscribers, ask, ready } = setup();
 
+    await ready;
     await ask("subscribe", 111);
     await ask("subscribe", 222);
     await ask("unsubscribe", 111);
@@ -332,9 +335,11 @@ describe("on-mesh commands", () => {
   });
 
   test("rejects a filter the app considers invalid", async () => {
-    const { subscribers, ask } = await setup({
+    const { subscribers, ask, ready } = setup("alerts", {
       validateFilter: (filter) => (/^\d{6}( \d{6})*$/.test(filter) ? undefined : "Filter must be 6-digit FIPS codes"),
     });
+
+    await ready;
 
     assert.match(await ask("subscribe maine", 4242), /must be 6-digit FIPS/);
     assert.equal(subscribers.isSubscribed(4242), false);
@@ -343,15 +348,16 @@ describe("on-mesh commands", () => {
   });
 
   test("uses the label and words the app supplies", async () => {
-    const { subscribers, ask } = await setup({
-      topic: "wx",
+    const { subscribers, ask, ready } = setup("wx", {
       label: "weather alerts",
       subscribeWords: ["alertme"],
       unsubscribeWords: ["stop"],
     });
 
+    await ready;
+
     assert.match(await ask("alertme", 4242), /Subscribed to weather alerts/);
-    assert.ok(subscribers.isSubscribed(4242, "wx"));
+    assert.ok(subscribers.isSubscribed(4242));
     assert.match(await ask("stop", 4242), /Unsubscribed from weather alerts/);
   });
 });
