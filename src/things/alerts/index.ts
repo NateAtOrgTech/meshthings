@@ -135,11 +135,11 @@ const alertsModule: MeshThingModule<AlertsConfig> = {
     const pruneSeen = db.prepare("DELETE FROM seen_alerts WHERE expires_at <= ?");
 
     const recent: SameMessage[] = [];
-    const health = { lastLineAt: 0, lastTestAt: 0, lastAlertAt: 0, decoded: 0, broadcast: 0, suppressed: 0, errors: 0 };
+    // Every counter here is reported by `receiver`. A counter nothing reads is
+    // bookkeeping that makes a module look observable when it is not.
+    const health = { lastTestAt: 0, decoded: 0, suppressed: 0, errors: 0 };
 
     function decodeAndRelay(line: string) {
-      health.lastLineAt = now();
-
       const alert = parseSame(line, now());
 
       if (!alert) {
@@ -166,7 +166,6 @@ const alertsModule: MeshThingModule<AlertsConfig> = {
       pruneSeen.run(now());
       markSeen.run(alert.key, alert.expiresAt);
 
-      health.lastAlertAt = alert.issuedAt;
       recent.unshift(alert);
       recent.splice(RECENT_ALERTS_KEPT);
 
@@ -198,7 +197,6 @@ const alertsModule: MeshThingModule<AlertsConfig> = {
         priority: alert.isImmediate ? "high" : "normal",
       });
 
-      health.broadcast += sent;
       log(`${alert.event} sent to ${sent} of ${recipients.length} subscribers`);
     }
 
@@ -241,14 +239,19 @@ const alertsModule: MeshThingModule<AlertsConfig> = {
         return "Receiver not configured -- alerts are NOT being monitored.";
       }
 
+      // decoded says the chain is producing output at all, suppressed confirms
+      // the triple-burst dedup is working, errors surfaces the boundary
+      // catching faults rather than hiding them
+      const counts = `${health.decoded} decoded, ${health.suppressed} suppressed, ${health.errors} errors`;
+
       if (!health.lastTestAt) {
-        return `No weekly test seen yet. ${subscribers.count(topic)} subscribers.`;
+        return `No weekly test seen yet. ${subscribers.count(topic)} subscribers. ${counts}.`;
       }
 
       const days = Math.floor((now() - health.lastTestAt) / (24 * 60 * 60 * 1000));
       const state = days > testIntervalDays ? "STALE" : "ok";
 
-      return `Receiver ${state}: last test ${days}d ago. ${subscribers.count(topic)} subscribers.`;
+      return `Receiver ${state}: last test ${days}d ago. ${subscribers.count(topic)} subscribers. ${counts}.`;
     }
 
     const commands: Command[] = [

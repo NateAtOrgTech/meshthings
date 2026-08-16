@@ -435,6 +435,45 @@ describe("receiver health", () => {
     assert.match((await fake.waitForSends(1))[0].text, /Receiver not configured/);
   });
 
+  test("reports what the decoder has actually produced", async () => {
+    const { ask, decoder } = await setup();
+
+    decoder.send(WEEKLY_TEST);
+    decoder.send(TORNADO);
+    decoder.send(TORNADO); // the same burst again, suppressed
+
+    const reply = await ask("receiver");
+
+    assert.match(reply, /3 decoded/);
+    assert.match(reply, /1 suppressed/);
+    assert.match(reply, /0 errors/);
+  });
+
+  test("counts a fault caught by the error boundary", async () => {
+    const areaNames = new Proxy({} as Record<string, string>, {
+      get() {
+        throw new Error("fault while formatting");
+      },
+    });
+
+    const { ask, fake, decoder } = await setup({ areaNames });
+
+    await ask("subscribe 023005", 111);
+    fake.clear();
+    decoder.send(TORNADO);
+    await fake.settle();
+
+    assert.match(await ask("receiver"), /1 errors/);
+  });
+
+  test("keeps the reply inside a packet", async () => {
+    const { ask, decoder } = await setup();
+
+    decoder.send(WEEKLY_TEST);
+
+    assert.ok(Buffer.byteLength(await ask("receiver"), "utf8") <= MAX_TEXT_BYTES);
+  });
+
   test("counts subscribers", async () => {
     const { ask, decoder } = await setup();
 
