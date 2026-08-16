@@ -272,6 +272,37 @@ describe("search", () => {
     assert.match(await ask("find nonsense"), /Nothing matches/);
   });
 
+  test("never tells the reader to send a command that searches instead of pages", async () => {
+    const { ask } = await setup();
+
+    await seed(ask);
+
+    const matches = await ask("find e");
+
+    // "find 2" would search for "2". If the footer said that, following it
+    // would silently take the reader somewhere else entirely.
+    assert.ok(!/find \d/.test(matches), `misleading footer: ${matches}`);
+  });
+
+  test("says how to get fewer results when there are too many to show", async () => {
+    const { ask } = await setup();
+
+    await seed(ask);
+
+    assert.match(await ask("find e"), /narrow the search/);
+  });
+
+  test("shows a single match without any paging noise", async () => {
+    const { ask } = await setup();
+
+    await ask("register tides Tide times for Casco Bay", 111);
+
+    const reply = await ask("find tides");
+
+    assert.match(reply, /tides - Tide times/);
+    assert.ok(!reply.includes("("), `unexpected footer: ${reply}`);
+  });
+
   test("requires a term", async () => {
     const { ask } = await setup();
 

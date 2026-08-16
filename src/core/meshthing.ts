@@ -191,7 +191,15 @@ function createMeshThing(options: MeshThingOptions = {}) {
 
     meshDevice = device;
 
-    await mountModules(modules);
+    try {
+      await mountModules(modules);
+    } catch (error) {
+      // A failed mount must not leave half a node running. The caller cannot
+      // do this itself -- listen() threw, so it has nothing to stop.
+      await stop();
+
+      throw error;
+    }
 
     registerBuiltins();
 
@@ -214,8 +222,12 @@ function createMeshThing(options: MeshThingOptions = {}) {
         log: (message: string) => console.log(`[${name}] ${message}`),
       });
 
-      registerCommands(name, spec, mounted.commands);
+      // Recorded before its commands are claimed. registerCommands throws on a
+      // collision, and by then this module has already opened whatever it
+      // opens -- it has to stay reachable by stop() or its socket and its
+      // child process are simply abandoned.
       mountedModules.push({ name, description: spec.module.description, mounted });
+      registerCommands(name, spec, mounted.commands);
     }
   }
 

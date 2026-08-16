@@ -35,7 +35,10 @@ function truncateBytes(text: string, budget: number) {
 // Pack lines into whichever page was asked for. Any listing longer than a
 // couple of entries outgrows a single packet, so this is shared rather than
 // reimplemented per module.
-function paginate(lines: string[], page: number, moreCommand: string, budget = MAX_TEXT_BYTES) {
+// moreCommand is what the reader sends to get the next page. Omit it when there
+// is no such command -- a footer naming one that does something else is worse
+// than no footer at all.
+function paginate(lines: string[], page: number, moreCommand?: string, budget = MAX_TEXT_BYTES) {
   if (lines.length === 0) {
     return "";
   }
@@ -73,7 +76,7 @@ function paginate(lines: string[], page: number, moreCommand: string, budget = M
     return body;
   }
 
-  const next = index + 2 <= pages.length ? ` ${moreCommand} ${index + 2}` : "";
+  const next = moreCommand && index + 2 <= pages.length ? ` ${moreCommand} ${index + 2}` : "";
 
   return `${body}\n(${index + 1}/${pages.length})${next}`;
 }

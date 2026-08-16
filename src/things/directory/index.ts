@@ -115,7 +115,12 @@ function createDirectory(database: string | DatabaseHandle = "directory.db"): Co
       return `Nothing matches "${truncateBytes(term, 32)}"`;
     }
 
-    return paginate(rows.map(listLine), 1, "find", MAX_REPLY_BYTES);
+    // No page command: every argument here is part of the search term, so
+    // "find 2" is a search for "2" rather than a second page. A footer saying
+    // otherwise sends the reader somewhere they did not ask to go.
+    const matches = paginate(rows.map(listLine), 1, undefined, MAX_REPLY_BYTES);
+
+    return rows.length > 1 && matches.includes("(1/") ? `${matches} narrow the search` : matches;
   }
 
   function whois(args: string[]) {
