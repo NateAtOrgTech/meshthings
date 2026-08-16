@@ -211,6 +211,54 @@ describe("broadcasting alerts", () => {
   });
 });
 
+describe("fan-out limits", () => {
+  test("stops sending once the recipient cap is reached", async () => {
+    const { ask, fake, decoder } = await setup({ maxRecipients: 3 });
+
+    for (const node of [111, 222, 333, 444, 555]) {
+      await ask("subscribe 023005", node);
+    }
+
+    fake.clear();
+    decoder.send(TORNADO);
+    await fake.settle(80);
+
+    assert.equal(fake.sent.length, 3, `expected the cap to hold: ${JSON.stringify(fake.texts())}`);
+  });
+
+  test("keeps the earliest subscribers when it has to drop some", async () => {
+    const { ask, fake, decoder } = await setup({ maxRecipients: 2 });
+
+    for (const node of [111, 222, 333]) {
+      await ask("subscribe 023005", node);
+    }
+
+    fake.clear();
+    decoder.send(TORNADO);
+    await fake.waitForSends(2);
+    await fake.settle(60);
+
+    // Deterministic and defensible: subscription order, not arbitrary
+    assert.deepEqual(
+      fake.sent.map((message) => message.to),
+      [111, 222],
+    );
+  });
+
+  test("sends to everyone when the list is under the cap", async () => {
+    const { ask, fake, decoder } = await setup({ maxRecipients: 10 });
+
+    for (const node of [111, 222]) {
+      await ask("subscribe 023005", node);
+    }
+
+    fake.clear();
+    decoder.send(TORNADO);
+
+    assert.equal((await fake.waitForSends(2)).length, 2);
+  });
+});
+
 describe("suppressing repeats and tests", () => {
   test("sends one message for the three bursts of an alert", async () => {
     const { ask, fake, decoder } = await setup();

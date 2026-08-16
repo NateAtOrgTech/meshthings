@@ -229,7 +229,8 @@ The user running it needs access to the serial device — on most Linux distribu
 
 - **The SAME parser has not been run against real decoder output.** The line handling around it is tested, but confirm the exact format your decoder emits before relying on the alerts thing.
 - **Node prints an `ExperimentalWarning` for `node:sqlite`.** Harmless, and worth knowing about before you deploy for other people.
-- **The directory has no trust model.** Anyone can register anything, and names are first-come.
+- **The directory has no trust model.** Anyone can register anything, and names are first-come. Registrations are validated for what is safe to render, not for whether they are true.
+- **Alert fan-out is capped** (`maxRecipients`, default 40). Sends are paced, so a large subscriber list would otherwise occupy the channel for a long time during the emergency it is warning about. Recipients past the cap are not sent to, and the log says so.
 
 ## Licence
 

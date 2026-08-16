@@ -37,6 +37,9 @@ function createExampleConfig(): MeshthingsConfig {
           port: 41234,
           // How old a reading may be before it is reported as stale
           staleAfterMs: 10 * 60 * 1000,
+          // Only accept readings from the station itself. Leave unset at first;
+          // the log reports where observations arrive from.
+          stationAddress: "192.168.1.50",
         },
       },
 
@@ -58,6 +61,10 @@ function createExampleConfig(): MeshthingsConfig {
           areaNames: { "023005": "Cumberland", "023031": "York" },
           // Days without a weekly test before `receiver` reports STALE
           testIntervalDays: 8,
+          // Most subscribers one alert is sent to. Sends are paced, so this is
+          // really a channel-time budget: 40 is under three minutes of
+          // transmitting. Past it, recipients are dropped and the log says so.
+          maxRecipients: 40,
         },
       },
 

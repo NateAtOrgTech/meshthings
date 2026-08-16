@@ -11,6 +11,11 @@ const DEFAULT_TEST_INTERVAL_DAYS = 8;
 const RECENT_ALERTS_KEPT = 10;
 // Leave headroom for the area list before the expiry clause
 const MAX_AREA_BYTES = 60;
+// Directed sends are paced, so recipients cost channel time: at the default 4s
+// spacing, 40 is a little under three minutes of transmitting. Uncapped, a
+// large subscriber list jams the channel for everyone -- during the emergency
+// the alert is warning them about.
+const DEFAULT_MAX_RECIPIENTS = 40;
 
 // Where decoded SAME lines come from. Injectable so the module can be driven by
 // a real decoder, a log replay, or a test.
@@ -35,6 +40,8 @@ type AlertsConfig = {
   timeZone?: string;
   topic?: string;
   testIntervalDays?: number;
+  // Most subscribers one alert will be sent to before the rest are dropped
+  maxRecipients?: number;
   now?: () => number;
 };
 
@@ -110,6 +117,7 @@ const alertsModule: MeshThingModule<AlertsConfig> = {
     const areaNames = config?.areaNames ?? {};
     const now = config?.now ?? (() => Date.now());
     const testIntervalDays = config?.testIntervalDays ?? DEFAULT_TEST_INTERVAL_DAYS;
+    const maxRecipients = config?.maxRecipients ?? DEFAULT_MAX_RECIPIENTS;
     const formatTime = createTimeFormatter(timeZone);
 
     const db = openDatabase(config?.database ?? "alerts.db");
@@ -173,7 +181,20 @@ const alertsModule: MeshThingModule<AlertsConfig> = {
         return;
       }
 
-      const sent = sendMany(formatAlert(alert, areaNames, formatTime), recipients, {
+      // Dropping recipients is a bad outcome; jamming the channel so nobody can
+      // communicate at all is a worse one. The log line is the signal that this
+      // subscriber list has outgrown directed sends.
+      const addressed = recipients.slice(0, maxRecipients);
+
+      if (recipients.length > addressed.length) {
+        log(
+          `WARNING: ${alert.event} matched ${recipients.length} subscribers but the cap is ` +
+            `${maxRecipients} -- ${recipients.length - addressed.length} were NOT sent. ` +
+            "Directed fan-out has outgrown this channel.",
+        );
+      }
+
+      const sent = sendMany(formatAlert(alert, areaNames, formatTime), addressed, {
         priority: alert.isImmediate ? "high" : "normal",
       });
 
