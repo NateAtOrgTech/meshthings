@@ -426,6 +426,28 @@ describe("outbound queue", () => {
   });
 });
 
+describe("after stopping", () => {
+  test("stops dispatching commands into modules that have released their resources", async () => {
+    let calls = 0;
+
+    const { fake, thing } = await setup({
+      commands: [{ commandStrings: "count", commandFunction: () => void calls++ }],
+    });
+
+    fake.receive("count");
+    await fake.settle();
+
+    assert.equal(calls, 1);
+
+    await thing.stop();
+
+    fake.receive("count");
+    await fake.settle();
+
+    assert.equal(calls, 1, "a command was dispatched after stop()");
+  });
+});
+
 describe("stats", () => {
   test("counts handled commands and sent messages", async () => {
     const { fake, thing } = await setup(echo);

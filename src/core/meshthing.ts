@@ -220,13 +220,19 @@ function createMeshThing(options: MeshThingOptions = {}) {
   // beats discovering it when someone sends the command at 3am.
   function registerCommands(name: string, spec: { prefix?: string; rename?: Record<string, string>; disable?: string[] }, commands: Command[]) {
     const primaries: string[] = [];
+    // Keyed case-insensitively, like disable and collision detection. Keyed by
+    // the declared spelling, a rename written in the wrong case did nothing at
+    // all -- and said nothing about it.
+    const renames = new Map(
+      Object.entries(spec.rename ?? {}).map(([from, to]) => [from.toLocaleLowerCase(), to] as const),
+    );
 
     commands.forEach((command) => {
       const declared = typeof command.commandStrings === "string" ? [command.commandStrings] : command.commandStrings;
 
       const resolved = declared
         .filter((word) => !(spec.disable ?? []).some((entry) => entry.toLocaleLowerCase() === word.toLocaleLowerCase()))
-        .map((word) => `${spec.prefix ?? ""}${spec.rename?.[word] ?? word}`);
+        .map((word) => `${spec.prefix ?? ""}${renames.get(word.toLocaleLowerCase()) ?? word}`);
 
       resolved.forEach((word) => {
         const key = word.toLocaleLowerCase();
@@ -261,9 +267,7 @@ function createMeshThing(options: MeshThingOptions = {}) {
       return "No commands available";
     }
 
-    const lines = helpSummaries.map((summary) =>
-      summary.name === "app" ? summary.words.join(", ") : `${summary.name}: ${summary.words.join(", ")}`,
-    );
+    const lines = helpSummaries.map((summary) => `${summary.name}: ${summary.words.join(", ")}`);
 
     return paginate(lines, parsePage(args), "help", maxTextBytes);
   }
@@ -422,6 +426,13 @@ function createMeshThing(options: MeshThingOptions = {}) {
   }
 
   async function messageHandler(messagePacket: Types.PacketMetadata<string>) {
+    // Modules have released their sockets, processes and database handles by
+    // now, so dispatching into them means running handlers against closed
+    // resources -- and the reply would be swallowed anyway
+    if (stopped) {
+      return;
+    }
+
     // Filter messages we don't respond to. Until we know our own node number we
     // can't tell those apart, so stay quiet.
     if (!myNodeInfo || myNodeInfo.myNodeNum === messagePacket.from || myNodeInfo.myNodeNum !== messagePacket.to) {

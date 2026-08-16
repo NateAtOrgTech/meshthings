@@ -138,6 +138,17 @@ describe("command collisions", () => {
     assert.equal(await ask("dirstatus"), "dir status");
   });
 
+  test("renames regardless of how the word was cased", async () => {
+    const { ask } = await mount([
+      moduleNamed("alerts", ["status"], "alert status"),
+      // The module declares "Status"; the deployment writes it lowercase
+      { module: moduleNamed("directory", ["Status"], "dir status"), rename: { status: "dstatus" } },
+    ]);
+
+    assert.equal(await ask("status"), "alert status");
+    assert.equal(await ask("dstatus"), "dir status");
+  });
+
   test("resolves a collision by renaming one word", async () => {
     const { ask } = await mount([
       moduleNamed("alerts", ["status"], "alert status"),
