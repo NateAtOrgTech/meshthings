@@ -43,11 +43,27 @@ const weatherModule: MeshThingModule<WeatherConfig> = {
       try {
         const parsed = JSON.parse(message.toString());
 
-        if (parsed.type === "obs_st") {
-          data.temperatureC = parsed.obs[0][7];
-          data.temperatureF = data.temperatureC * (9.0 / 5) + 32;
-          data.lastUpdated = Date.now();
+        if (parsed.type !== "obs_st") {
+          return;
         }
+
+        // Index 7 of the first observation is air temperature in Celsius. A
+        // packet can be valid JSON of roughly the right shape and still not
+        // have it -- `obs: [[]]` reads as undefined without throwing. Checking
+        // here rather than at render keeps the last good reading instead of
+        // poisoning it, and the staleness marker already reports honestly that
+        // the reading is old.
+        const celsius = parsed.obs?.[0]?.[7];
+
+        if (!Number.isFinite(celsius)) {
+          log(`ignored an observation with no usable temperature: ${JSON.stringify(celsius)}`);
+
+          return;
+        }
+
+        data.temperatureC = celsius;
+        data.temperatureF = celsius * (9.0 / 5) + 32;
+        data.lastUpdated = Date.now();
       } catch (error) {
         log(`ignored malformed broadcast: ${error}`);
       }
