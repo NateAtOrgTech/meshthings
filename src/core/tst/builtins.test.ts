@@ -22,7 +22,7 @@ async function mount(specs: ModuleSpec[] = [], options: MeshThingOptions = {}) {
   const thing = createMeshThing({
     minSendIntervalMs: 0,
     version: "1.2.3",
-    now: () => clock,
+    statsClock: () => clock,
     ...options,
   });
 

@@ -89,7 +89,11 @@ type MeshThingOptions = {
   onUnknown?: CommandHandler;
   // Reported by the `sys` command
   version?: string;
-  now?: () => number;
+  // Drives the reported clock -- uptime and the last-seen timestamps -- and
+  // nothing else. Transmit pacing deliberately stays on real time: airtime is
+  // a physical constraint, and a fake clock cannot make a radio send faster,
+  // so letting a test speed it up would only prove something untrue.
+  statsClock?: () => number;
 };
 
 type Stats = {
@@ -162,8 +166,8 @@ function createMeshThing(options: MeshThingOptions = {}) {
   let stopped = false;
   let lastSentAt = 0;
   const version = options.version ?? "dev";
-  const now = options.now ?? (() => Date.now());
-  const startedAt = now();
+  const statsNow = options.statsClock ?? (() => Date.now());
+  const startedAt = statsNow();
   let stats: Stats = {
     startedAt,
     uptimeMs: 0,
@@ -413,7 +417,7 @@ function createMeshThing(options: MeshThingOptions = {}) {
       try {
         await meshDevice!.sendText(item.text, item.options.to ?? "broadcast", item.options.wantAck ?? true, item.options.channel);
         stats.sent++;
-        stats.lastSentAt = now();
+        stats.lastSentAt = statsNow();
       } catch (error) {
         stats.errors++;
         console.error(error);
@@ -460,7 +464,7 @@ function createMeshThing(options: MeshThingOptions = {}) {
     // Counted on dispatch rather than on success, so `sys` includes the
     // command asking the question and a failure still shows as traffic
     stats.handled++;
-    stats.lastCommandAt = now();
+    stats.lastCommandAt = statsNow();
 
     try {
       result = await handler(tokens.slice(1), context);
@@ -493,7 +497,7 @@ function createMeshThing(options: MeshThingOptions = {}) {
   }
 
   function getStats(): Stats {
-    return { ...stats, queued: queue.length, uptimeMs: now() - startedAt };
+    return { ...stats, queued: queue.length, uptimeMs: statsNow() - startedAt };
   }
 
   // Stop accepting and draining outbound traffic, and let modules release
