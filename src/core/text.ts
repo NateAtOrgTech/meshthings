@@ -41,11 +41,15 @@ function paginate(lines: string[], page: number, moreCommand: string, budget = M
   }
 
   const perPage = budget - 28; // reserve room for the "(1/3) more" footer
+  // A line longer than a whole page would otherwise be emitted intact, pushing
+  // the page past the byte limit -- and what send() then truncates is the tail,
+  // which is the footer telling the reader there are more pages at all.
+  const clamped = lines.map((line) => truncateBytes(line, perPage));
   const pages: string[][] = [];
   let current: string[] = [];
   let size = 0;
 
-  lines.forEach((line) => {
+  clamped.forEach((line) => {
     const cost = byteLength(line) + 1; // newline
 
     if (current.length > 0 && size + cost > perPage) {
