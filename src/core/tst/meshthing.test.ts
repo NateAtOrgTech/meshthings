@@ -438,8 +438,11 @@ describe("stats", () => {
 
     assert.equal(stats.handled, 2);
     assert.equal(stats.sent, 2);
-    assert.equal(stats.lastCommand, "echo");
-    assert.equal(stats.lastSent, "b");
+    // Timestamps, not content: the endpoint must not carry other people's words
+    assert.ok(stats.lastCommandAt > 0);
+    assert.ok(stats.lastSentAt > 0);
+    assert.equal("lastSent" in stats, false);
+    assert.equal("lastCommand" in stats, false);
     assert.equal(stats.queued, 0);
   });
 

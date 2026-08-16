@@ -95,8 +95,11 @@ type MeshThingOptions = {
 type Stats = {
   startedAt: number;
   uptimeMs: number;
-  lastSent: string;
-  lastCommand: string;
+  // Timestamps rather than content. "Nothing for six hours" is the operational
+  // signal; what the message actually said answers no question worth the
+  // privacy cost of keeping other people's words in a stats endpoint.
+  lastSentAt: number;
+  lastCommandAt: number;
   handled: number;
   errors: number;
   queued: number;
@@ -164,8 +167,8 @@ function createMeshThing(options: MeshThingOptions = {}) {
   let stats: Stats = {
     startedAt,
     uptimeMs: 0,
-    lastSent: "",
-    lastCommand: "",
+    lastSentAt: 0,
+    lastCommandAt: 0,
     handled: 0,
     errors: 0,
     queued: 0,
@@ -406,7 +409,7 @@ function createMeshThing(options: MeshThingOptions = {}) {
       try {
         await meshDevice!.sendText(item.text, item.options.to ?? "broadcast", item.options.wantAck ?? true, item.options.channel);
         stats.sent++;
-        stats.lastSent = item.text;
+        stats.lastSentAt = now();
       } catch (error) {
         stats.errors++;
         console.error(error);
@@ -446,7 +449,7 @@ function createMeshThing(options: MeshThingOptions = {}) {
     // Counted on dispatch rather than on success, so `sys` includes the
     // command asking the question and a failure still shows as traffic
     stats.handled++;
-    stats.lastCommand = command;
+    stats.lastCommandAt = now();
 
     try {
       result = await handler(tokens.slice(1), context);
