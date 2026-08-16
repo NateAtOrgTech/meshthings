@@ -138,6 +138,17 @@ describe("command collisions", () => {
     assert.equal(await ask("dirstatus"), "dir status");
   });
 
+  test("renames regardless of how the word was cased", async () => {
+    const { ask } = await mount([
+      moduleNamed("alerts", ["status"], "alert status"),
+      // The module declares "Status"; the deployment writes it lowercase
+      { module: moduleNamed("directory", ["Status"], "dir status"), rename: { status: "dstatus" } },
+    ]);
+
+    assert.equal(await ask("status"), "alert status");
+    assert.equal(await ask("dstatus"), "dir status");
+  });
+
   test("resolves a collision by renaming one word", async () => {
     const { ask } = await mount([
       moduleNamed("alerts", ["status"], "alert status"),
@@ -158,6 +169,49 @@ describe("command collisions", () => {
 
     assert.equal(await ask("status"), "alert status");
     assert.equal(await ask("info"), "dir status");
+  });
+});
+
+describe("a failed mount", () => {
+  test("stops the modules that were already started", async () => {
+    const stopped: string[] = [];
+
+    const stoppable = (name: string, words: string[]): MeshThingModule => ({
+      name,
+      description: name,
+      create: () => ({
+        commands: [{ commandStrings: words, commandFunction: () => name }],
+        stop: () => void stopped.push(name),
+      }),
+    });
+
+    // The second module's create() has already run -- and in a real one would
+    // have opened a socket or spawned a decoder -- before the collision throws
+    await assert.rejects(() => mount([stoppable("first", ["status"]), stoppable("second", ["status"])]));
+
+    assert.deepEqual(stopped, ["first", "second"], "a started module was abandoned");
+  });
+
+  test("leaves nothing running when a module throws while starting", async () => {
+    const stopped: string[] = [];
+
+    const good: MeshThingModule = {
+      name: "good",
+      description: "starts fine",
+      create: () => ({ commands: [], stop: () => void stopped.push("good") }),
+    };
+
+    const bad: MeshThingModule = {
+      name: "bad",
+      description: "throws on create",
+      create: () => {
+        throw new Error("could not start");
+      },
+    };
+
+    await assert.rejects(() => mount([good, bad]), /could not start/);
+
+    assert.deepEqual(stopped, ["good"]);
   });
 });
 

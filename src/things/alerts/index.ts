@@ -11,6 +11,11 @@ const DEFAULT_TEST_INTERVAL_DAYS = 8;
 const RECENT_ALERTS_KEPT = 10;
 // Leave headroom for the area list before the expiry clause
 const MAX_AREA_BYTES = 60;
+// Directed sends are paced, so recipients cost channel time: at the default 4s
+// spacing, 40 is a little under three minutes of transmitting. Uncapped, a
+// large subscriber list jams the channel for everyone -- during the emergency
+// the alert is warning them about.
+const DEFAULT_MAX_RECIPIENTS = 40;
 
 // Where decoded SAME lines come from. Injectable so the module can be driven by
 // a real decoder, a log replay, or a test.
@@ -35,6 +40,8 @@ type AlertsConfig = {
   timeZone?: string;
   topic?: string;
   testIntervalDays?: number;
+  // Most subscribers one alert will be sent to before the rest are dropped
+  maxRecipients?: number;
   now?: () => number;
 };
 
@@ -72,25 +79,32 @@ function createSpawnSource({ command, args = [] }: SpawnSource, log: (message: s
   };
 }
 
-function formatExpiry(at: number, timeZone: string) {
-  return new Intl.DateTimeFormat("en-GB", {
-    timeZone,
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).format(new Date(at));
+// Built once and validated at startup. Intl throws RangeError on an unknown
+// zone, and the only place that would surface is inside the decoder's stdout
+// callback, where a throw is an uncaught exception -- so an unnoticed typo in
+// TIME_ZONE would kill the node at the moment the first real alert arrived.
+function createTimeFormatter(timeZone: string) {
+  let formatter: Intl.DateTimeFormat;
+
+  try {
+    formatter = new Intl.DateTimeFormat("en-GB", { timeZone, hour: "2-digit", minute: "2-digit", hour12: false });
+  } catch (error) {
+    throw new Error(
+      `alerts: "${timeZone}" is not a valid IANA time zone (${(error as Error).message}). ` +
+        "Expected something like America/New_York.",
+    );
+  }
+
+  return (at: number) => formatter.format(new Date(at));
 }
 
 // The header gives codes, not prose, so the mesh message is assembled rather
 // than summarised -- which is why it fits a packet comfortably.
-function formatAlert(alert: SameMessage, areaNames: Record<string, string>, timeZone: string) {
+function formatAlert(alert: SameMessage, areaNames: Record<string, string>, formatTime: (at: number) => string) {
   const names = alert.areas.map((area) => areaNames[area] ?? areaNames[area.slice(-5)] ?? area);
   const areas = truncateBytes(names.join(", "), MAX_AREA_BYTES);
 
-  return truncateBytes(
-    `${alert.eventName}: ${areas} until ${formatExpiry(alert.expiresAt, timeZone)}`,
-    MAX_TEXT_BYTES,
-  );
+  return truncateBytes(`${alert.eventName}: ${areas} until ${formatTime(alert.expiresAt)}`, MAX_TEXT_BYTES);
 }
 
 const alertsModule: MeshThingModule<AlertsConfig> = {
@@ -103,6 +117,8 @@ const alertsModule: MeshThingModule<AlertsConfig> = {
     const areaNames = config?.areaNames ?? {};
     const now = config?.now ?? (() => Date.now());
     const testIntervalDays = config?.testIntervalDays ?? DEFAULT_TEST_INTERVAL_DAYS;
+    const maxRecipients = config?.maxRecipients ?? DEFAULT_MAX_RECIPIENTS;
+    const formatTime = createTimeFormatter(timeZone);
 
     const db = openDatabase(config?.database ?? "alerts.db");
     const subscribers = createSubscribers(db, topic);
@@ -119,11 +135,11 @@ const alertsModule: MeshThingModule<AlertsConfig> = {
     const pruneSeen = db.prepare("DELETE FROM seen_alerts WHERE expires_at <= ?");
 
     const recent: SameMessage[] = [];
-    const health = { lastLineAt: 0, lastTestAt: 0, lastAlertAt: 0, decoded: 0, broadcast: 0, suppressed: 0 };
+    // Every counter here is reported by `receiver`. A counter nothing reads is
+    // bookkeeping that makes a module look observable when it is not.
+    const health = { lastTestAt: 0, decoded: 0, suppressed: 0, errors: 0 };
 
-    function handleLine(line: string) {
-      health.lastLineAt = now();
-
+    function decodeAndRelay(line: string) {
       const alert = parseSame(line, now());
 
       if (!alert) {
@@ -150,12 +166,11 @@ const alertsModule: MeshThingModule<AlertsConfig> = {
       pruneSeen.run(now());
       markSeen.run(alert.key, alert.expiresAt);
 
-      health.lastAlertAt = alert.issuedAt;
       recent.unshift(alert);
       recent.splice(RECENT_ALERTS_KEPT);
 
       // A subscriber with no filter wants everything
-      const recipients = subscribers.matching(topic, (filter) =>
+      const recipients = subscribers.matching((filter) =>
         filter === null ? true : areaMatches(alert.areas, filter.split(/\s+/)),
       );
 
@@ -165,12 +180,36 @@ const alertsModule: MeshThingModule<AlertsConfig> = {
         return;
       }
 
-      const sent = sendMany(formatAlert(alert, areaNames, timeZone), recipients, {
+      // Dropping recipients is a bad outcome; jamming the channel so nobody can
+      // communicate at all is a worse one. The log line is the signal that this
+      // subscriber list has outgrown directed sends.
+      const addressed = recipients.slice(0, maxRecipients);
+
+      if (recipients.length > addressed.length) {
+        log(
+          `WARNING: ${alert.event} matched ${recipients.length} subscribers but the cap is ` +
+            `${maxRecipients} -- ${recipients.length - addressed.length} were NOT sent. ` +
+            "Directed fan-out has outgrown this channel.",
+        );
+      }
+
+      const sent = sendMany(formatAlert(alert, areaNames, formatTime), addressed, {
         priority: alert.isImmediate ? "high" : "normal",
       });
 
-      health.broadcast += sent;
       log(`${alert.event} sent to ${sent} of ${recipients.length} subscribers`);
+    }
+
+    // The decoder feeds us from a child-process callback, where an exception is
+    // uncaught and fatal. One malformed line, or one unforeseen fault in the
+    // relay path, must cost one alert rather than every alert after it.
+    function handleLine(line: string) {
+      try {
+        decodeAndRelay(line);
+      } catch (error) {
+        health.errors++;
+        log(`failed to relay a decoded line: ${error}`);
+      }
     }
 
     let source: AlertSource | undefined;
@@ -189,7 +228,7 @@ const alertsModule: MeshThingModule<AlertsConfig> = {
       }
 
       const lines = recent.map(
-        (alert) => `${alert.eventName} ${formatExpiry(alert.issuedAt, timeZone)}`,
+        (alert) => `${alert.eventName} ${formatTime(alert.issuedAt)}`,
       );
 
       return paginate(lines, parsePage(args), "alerts");
@@ -200,19 +239,23 @@ const alertsModule: MeshThingModule<AlertsConfig> = {
         return "Receiver not configured -- alerts are NOT being monitored.";
       }
 
+      // decoded says the chain is producing output at all, suppressed confirms
+      // the triple-burst dedup is working, errors surfaces the boundary
+      // catching faults rather than hiding them
+      const counts = `${health.decoded} decoded, ${health.suppressed} suppressed, ${health.errors} errors`;
+
       if (!health.lastTestAt) {
-        return `No weekly test seen yet. ${subscribers.count(topic)} subscribers.`;
+        return `No weekly test seen yet. ${subscribers.count()} subscribers. ${counts}.`;
       }
 
       const days = Math.floor((now() - health.lastTestAt) / (24 * 60 * 60 * 1000));
       const state = days > testIntervalDays ? "STALE" : "ok";
 
-      return `Receiver ${state}: last test ${days}d ago. ${subscribers.count(topic)} subscribers.`;
+      return `Receiver ${state}: last test ${days}d ago. ${subscribers.count()} subscribers. ${counts}.`;
     }
 
     const commands: Command[] = [
       ...subscriptionCommands(subscribers, {
-        topic,
         label: "weather alerts",
         validateFilter: (filter) =>
           /^\d{5,6}( \d{5,6})*$/.test(filter) ? undefined : "Filter must be FIPS county codes, e.g. 023005",

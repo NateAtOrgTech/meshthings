@@ -11,6 +11,10 @@ type WeatherConfig = {
   port?: number;
   // How old a reading may be before it is reported as stale
   staleAfterMs?: number;
+  // Only accept observations from this address. Unset accepts any host on the
+  // network, which is what the station itself needs on day one -- the log
+  // reports where readings are arriving from so this can be filled in.
+  stationAddress?: string;
 };
 
 const weatherModule: MeshThingModule<WeatherConfig> = {
@@ -27,8 +31,14 @@ const weatherModule: MeshThingModule<WeatherConfig> = {
       lastUpdated: 0,
     };
 
+    const stationAddress = config?.stationAddress;
     const server = dgram.createSocket("udp4");
+    const seenSources = new Set<string>();
     let closed = false;
+
+    if (!stationAddress) {
+      log("accepting observations from any host on the network; set stationAddress once the log shows where they arrive from");
+    }
 
     server.on("error", (error: Error) => {
       log(`socket error: ${error.message}`);
@@ -39,15 +49,47 @@ const weatherModule: MeshThingModule<WeatherConfig> = {
       }
     });
 
-    server.on("message", (message) => {
+    server.on("message", (message, source) => {
+      if (stationAddress && source.address !== stationAddress) {
+        // Once per address, or a spoofer could fill the log as easily as the
+        // readings it is trying to fake
+        if (!seenSources.has(source.address)) {
+          seenSources.add(source.address);
+          log(`ignoring observations from ${source.address}: stationAddress is ${stationAddress}`);
+        }
+
+        return;
+      }
+
       try {
         const parsed = JSON.parse(message.toString());
 
-        if (parsed.type === "obs_st") {
-          data.temperatureC = parsed.obs[0][7];
-          data.temperatureF = data.temperatureC * (9.0 / 5) + 32;
-          data.lastUpdated = Date.now();
+        if (parsed.type !== "obs_st") {
+          return;
         }
+
+        // Index 7 of the first observation is air temperature in Celsius. A
+        // packet can be valid JSON of roughly the right shape and still not
+        // have it -- `obs: [[]]` reads as undefined without throwing. Checking
+        // here rather than at render keeps the last good reading instead of
+        // poisoning it, and the staleness marker already reports honestly that
+        // the reading is old.
+        const celsius = parsed.obs?.[0]?.[7];
+
+        if (!Number.isFinite(celsius)) {
+          log(`ignored an observation with no usable temperature: ${JSON.stringify(celsius)}`);
+
+          return;
+        }
+
+        if (!seenSources.has(source.address)) {
+          seenSources.add(source.address);
+          log(`observations arriving from ${source.address}`);
+        }
+
+        data.temperatureC = celsius;
+        data.temperatureF = celsius * (9.0 / 5) + 32;
+        data.lastUpdated = Date.now();
       } catch (error) {
         log(`ignored malformed broadcast: ${error}`);
       }

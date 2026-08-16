@@ -6,6 +6,15 @@ const MAX_DESCRIPTION_BYTES = 96;
 // Listings trade detail for density -- `whois` has the full record
 const LIST_LINE_BYTES = 56;
 
+// Listings are multi-line and end in a pagination footer, so text that reaches
+// them has to be safe to compose. Anything else is rejected rather than quietly
+// edited: silently rewriting what somebody typed guesses at intent, and a clear
+// refusal tells them what to send instead.
+const VALID_NAME = /^[A-Za-z0-9._-]+$/;
+// C0 and C1 controls, DEL included. A newline in a description forges an extra
+// directory entry, or a convincing "(1/2) services 2" footer.
+const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f-\u009f]/;
+
 type ServiceRow = {
   node_num: number;
   name: string;
@@ -58,6 +67,14 @@ function createDirectory(database: string | DatabaseHandle = "directory.db"): Co
       return `Name too long (max ${MAX_NAME_BYTES} chars)`;
     }
 
+    if (!VALID_NAME.test(name)) {
+      return "Name may only contain letters, digits, and . - _";
+    }
+
+    if (CONTROL_CHARACTERS.test(description)) {
+      return "Description may not contain line breaks or control characters";
+    }
+
     const owner = selectOwnerOfName.get(name) as { node_num: number } | undefined;
 
     if (owner && owner.node_num !== context.from) {
@@ -98,7 +115,12 @@ function createDirectory(database: string | DatabaseHandle = "directory.db"): Co
       return `Nothing matches "${truncateBytes(term, 32)}"`;
     }
 
-    return paginate(rows.map(listLine), 1, "find", MAX_REPLY_BYTES);
+    // No page command: every argument here is part of the search term, so
+    // "find 2" is a search for "2" rather than a second page. A footer saying
+    // otherwise sends the reader somewhere they did not ask to go.
+    const matches = paginate(rows.map(listLine), 1, undefined, MAX_REPLY_BYTES);
+
+    return rows.length > 1 && matches.includes("(1/") ? `${matches} narrow the search` : matches;
   }
 
   function whois(args: string[]) {

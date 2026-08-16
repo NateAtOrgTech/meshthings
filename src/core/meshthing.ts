@@ -89,14 +89,21 @@ type MeshThingOptions = {
   onUnknown?: CommandHandler;
   // Reported by the `sys` command
   version?: string;
-  now?: () => number;
+  // Drives the reported clock -- uptime and the last-seen timestamps -- and
+  // nothing else. Transmit pacing deliberately stays on real time: airtime is
+  // a physical constraint, and a fake clock cannot make a radio send faster,
+  // so letting a test speed it up would only prove something untrue.
+  statsClock?: () => number;
 };
 
 type Stats = {
   startedAt: number;
   uptimeMs: number;
-  lastSent: string;
-  lastCommand: string;
+  // Timestamps rather than content. "Nothing for six hours" is the operational
+  // signal; what the message actually said answers no question worth the
+  // privacy cost of keeping other people's words in a stats endpoint.
+  lastSentAt: number;
+  lastCommandAt: number;
   handled: number;
   errors: number;
   queued: number;
@@ -159,13 +166,13 @@ function createMeshThing(options: MeshThingOptions = {}) {
   let stopped = false;
   let lastSentAt = 0;
   const version = options.version ?? "dev";
-  const now = options.now ?? (() => Date.now());
-  const startedAt = now();
+  const statsNow = options.statsClock ?? (() => Date.now());
+  const startedAt = statsNow();
   let stats: Stats = {
     startedAt,
     uptimeMs: 0,
-    lastSent: "",
-    lastCommand: "",
+    lastSentAt: 0,
+    lastCommandAt: 0,
     handled: 0,
     errors: 0,
     queued: 0,
@@ -184,7 +191,15 @@ function createMeshThing(options: MeshThingOptions = {}) {
 
     meshDevice = device;
 
-    await mountModules(modules);
+    try {
+      await mountModules(modules);
+    } catch (error) {
+      // A failed mount must not leave half a node running. The caller cannot
+      // do this itself -- listen() threw, so it has nothing to stop.
+      await stop();
+
+      throw error;
+    }
 
     registerBuiltins();
 
@@ -207,8 +222,12 @@ function createMeshThing(options: MeshThingOptions = {}) {
         log: (message: string) => console.log(`[${name}] ${message}`),
       });
 
-      registerCommands(name, spec, mounted.commands);
+      // Recorded before its commands are claimed. registerCommands throws on a
+      // collision, and by then this module has already opened whatever it
+      // opens -- it has to stay reachable by stop() or its socket and its
+      // child process are simply abandoned.
       mountedModules.push({ name, description: spec.module.description, mounted });
+      registerCommands(name, spec, mounted.commands);
     }
   }
 
@@ -217,13 +236,19 @@ function createMeshThing(options: MeshThingOptions = {}) {
   // beats discovering it when someone sends the command at 3am.
   function registerCommands(name: string, spec: { prefix?: string; rename?: Record<string, string>; disable?: string[] }, commands: Command[]) {
     const primaries: string[] = [];
+    // Keyed case-insensitively, like disable and collision detection. Keyed by
+    // the declared spelling, a rename written in the wrong case did nothing at
+    // all -- and said nothing about it.
+    const renames = new Map(
+      Object.entries(spec.rename ?? {}).map(([from, to]) => [from.toLocaleLowerCase(), to] as const),
+    );
 
     commands.forEach((command) => {
       const declared = typeof command.commandStrings === "string" ? [command.commandStrings] : command.commandStrings;
 
       const resolved = declared
         .filter((word) => !(spec.disable ?? []).some((entry) => entry.toLocaleLowerCase() === word.toLocaleLowerCase()))
-        .map((word) => `${spec.prefix ?? ""}${spec.rename?.[word] ?? word}`);
+        .map((word) => `${spec.prefix ?? ""}${renames.get(word.toLocaleLowerCase()) ?? word}`);
 
       resolved.forEach((word) => {
         const key = word.toLocaleLowerCase();
@@ -258,9 +283,7 @@ function createMeshThing(options: MeshThingOptions = {}) {
       return "No commands available";
     }
 
-    const lines = helpSummaries.map((summary) =>
-      summary.name === "app" ? summary.words.join(", ") : `${summary.name}: ${summary.words.join(", ")}`,
-    );
+    const lines = helpSummaries.map((summary) => `${summary.name}: ${summary.words.join(", ")}`);
 
     return paginate(lines, parsePage(args), "help", maxTextBytes);
   }
@@ -406,7 +429,7 @@ function createMeshThing(options: MeshThingOptions = {}) {
       try {
         await meshDevice!.sendText(item.text, item.options.to ?? "broadcast", item.options.wantAck ?? true, item.options.channel);
         stats.sent++;
-        stats.lastSent = item.text;
+        stats.lastSentAt = statsNow();
       } catch (error) {
         stats.errors++;
         console.error(error);
@@ -419,6 +442,13 @@ function createMeshThing(options: MeshThingOptions = {}) {
   }
 
   async function messageHandler(messagePacket: Types.PacketMetadata<string>) {
+    // Modules have released their sockets, processes and database handles by
+    // now, so dispatching into them means running handlers against closed
+    // resources -- and the reply would be swallowed anyway
+    if (stopped) {
+      return;
+    }
+
     // Filter messages we don't respond to. Until we know our own node number we
     // can't tell those apart, so stay quiet.
     if (!myNodeInfo || myNodeInfo.myNodeNum === messagePacket.from || myNodeInfo.myNodeNum !== messagePacket.to) {
@@ -446,7 +476,7 @@ function createMeshThing(options: MeshThingOptions = {}) {
     // Counted on dispatch rather than on success, so `sys` includes the
     // command asking the question and a failure still shows as traffic
     stats.handled++;
-    stats.lastCommand = command;
+    stats.lastCommandAt = statsNow();
 
     try {
       result = await handler(tokens.slice(1), context);
@@ -479,7 +509,7 @@ function createMeshThing(options: MeshThingOptions = {}) {
   }
 
   function getStats(): Stats {
-    return { ...stats, queued: queue.length, uptimeMs: now() - startedAt };
+    return { ...stats, queued: queue.length, uptimeMs: statsNow() - startedAt };
   }
 
   // Stop accepting and draining outbound traffic, and let modules release

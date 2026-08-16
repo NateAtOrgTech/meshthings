@@ -211,6 +211,54 @@ describe("broadcasting alerts", () => {
   });
 });
 
+describe("fan-out limits", () => {
+  test("stops sending once the recipient cap is reached", async () => {
+    const { ask, fake, decoder } = await setup({ maxRecipients: 3 });
+
+    for (const node of [111, 222, 333, 444, 555]) {
+      await ask("subscribe 023005", node);
+    }
+
+    fake.clear();
+    decoder.send(TORNADO);
+    await fake.settle(80);
+
+    assert.equal(fake.sent.length, 3, `expected the cap to hold: ${JSON.stringify(fake.texts())}`);
+  });
+
+  test("keeps the earliest subscribers when it has to drop some", async () => {
+    const { ask, fake, decoder } = await setup({ maxRecipients: 2 });
+
+    for (const node of [111, 222, 333]) {
+      await ask("subscribe 023005", node);
+    }
+
+    fake.clear();
+    decoder.send(TORNADO);
+    await fake.waitForSends(2);
+    await fake.settle(60);
+
+    // Deterministic and defensible: subscription order, not arbitrary
+    assert.deepEqual(
+      fake.sent.map((message) => message.to),
+      [111, 222],
+    );
+  });
+
+  test("sends to everyone when the list is under the cap", async () => {
+    const { ask, fake, decoder } = await setup({ maxRecipients: 10 });
+
+    for (const node of [111, 222]) {
+      await ask("subscribe 023005", node);
+    }
+
+    fake.clear();
+    decoder.send(TORNADO);
+
+    assert.equal((await fake.waitForSends(2)).length, 2);
+  });
+});
+
 describe("suppressing repeats and tests", () => {
   test("sends one message for the three bursts of an alert", async () => {
     const { ask, fake, decoder } = await setup();
@@ -286,6 +334,70 @@ describe("suppressing repeats and tests", () => {
   });
 });
 
+describe("configuration faults", () => {
+  test("refuses to start on an invalid time zone", async () => {
+    const fake = createMockDevice();
+    const thing = createMeshThing({ minSendIntervalMs: 0 });
+
+    // A typo here would otherwise lie dormant until the first real alert, and
+    // surface as an uncaught RangeError inside the decoder callback
+    await assert.rejects(
+      () =>
+        thing.listen(fake.device, [
+          { module: alertsModule, config: { database: openDatabase(":memory:"), timeZone: "America/NewYork" } },
+        ]),
+      /not a valid IANA time zone/,
+    );
+  });
+
+  test("names the offending zone and what one looks like", async () => {
+    const fake = createMockDevice();
+    const thing = createMeshThing({ minSendIntervalMs: 0 });
+
+    await assert.rejects(
+      () =>
+        thing.listen(fake.device, [
+          { module: alertsModule, config: { database: openDatabase(":memory:"), timeZone: "Mars/Olympus" } },
+        ]),
+      /Mars\/Olympus[\s\S]*America\/New_York/,
+    );
+  });
+
+  test("survives a fault while relaying one alert and keeps relaying the next", async () => {
+    let thrown = false;
+
+    // Stands in for any unforeseen fault in the relay path. Before the error
+    // boundary this reached the child-process callback and killed the node.
+    const areaNames = new Proxy({} as Record<string, string>, {
+      get() {
+        if (!thrown) {
+          thrown = true;
+
+          throw new Error("fault while formatting");
+        }
+
+        return undefined;
+      },
+    });
+
+    const { ask, fake, decoder } = await setup({ areaNames });
+
+    await ask("subscribe 023005", 111);
+    fake.clear();
+
+    decoder.send(TORNADO);
+    await fake.settle();
+
+    assert.equal(thrown, true);
+    assert.deepEqual(fake.texts(), [], "the faulting alert should not have been sent");
+
+    // The process is still here, and the next alert gets through
+    decoder.send("ZCZC-WXR-SVR-023005+0100-1232215-KGYX/NWS-");
+
+    assert.match((await fake.waitForSends(1))[0].text, /Severe Thunderstorm Warning/);
+  });
+});
+
 describe("receiver health", () => {
   test("reports that no test has been seen yet", async () => {
     const { ask } = await setup();
@@ -321,6 +433,45 @@ describe("receiver health", () => {
     fake.receive("receiver");
 
     assert.match((await fake.waitForSends(1))[0].text, /Receiver not configured/);
+  });
+
+  test("reports what the decoder has actually produced", async () => {
+    const { ask, decoder } = await setup();
+
+    decoder.send(WEEKLY_TEST);
+    decoder.send(TORNADO);
+    decoder.send(TORNADO); // the same burst again, suppressed
+
+    const reply = await ask("receiver");
+
+    assert.match(reply, /3 decoded/);
+    assert.match(reply, /1 suppressed/);
+    assert.match(reply, /0 errors/);
+  });
+
+  test("counts a fault caught by the error boundary", async () => {
+    const areaNames = new Proxy({} as Record<string, string>, {
+      get() {
+        throw new Error("fault while formatting");
+      },
+    });
+
+    const { ask, fake, decoder } = await setup({ areaNames });
+
+    await ask("subscribe 023005", 111);
+    fake.clear();
+    decoder.send(TORNADO);
+    await fake.settle();
+
+    assert.match(await ask("receiver"), /1 errors/);
+  });
+
+  test("keeps the reply inside a packet", async () => {
+    const { ask, decoder } = await setup();
+
+    decoder.send(WEEKLY_TEST);
+
+    assert.ok(Buffer.byteLength(await ask("receiver"), "utf8") <= MAX_TEXT_BYTES);
   });
 
   test("counts subscribers", async () => {

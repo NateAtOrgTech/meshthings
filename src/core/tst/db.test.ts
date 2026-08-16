@@ -32,9 +32,9 @@ describe("surviving garbage collection", () => {
   });
 
   test("keeps a subscriber store usable after a collection", () => {
-    const subscribers = createSubscribers(":memory:");
+    const subscribers = createSubscribers(":memory:", "alerts");
 
-    subscribers.subscribe(111, { filter: "023005" });
+    subscribers.subscribe(111, "023005");
 
     collectGarbage();
 
