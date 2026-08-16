@@ -29,6 +29,8 @@ The tradeoff is that it does not run on the radio. It runs on a computer next to
 
 **Everything outbound is paced.** Airtime is shared by everyone on the channel. A warning going out to forty subscribers would jam the mesh for everybody at the exact moment it matters most, so all transmissions — replies included — go through one queue that spaces them out. Life-safety alerts jump that queue; watches and routine chatter do not.
 
+**An unknown command is answered once, then not again for a while.** Two nodes running this would otherwise answer each other's help text forever — neither recognises the other's reply as a command, so each politely explains itself, permanently occupying the channel between them. A stranger still gets told what the node offers; they just don't get told five times. Real commands are never rate limited.
+
 **Replies must fit one packet.** A Meshtastic text message tops out around 200 bytes. Listings paginate (`services 2`) rather than being cut off.
 
 ## What's included
