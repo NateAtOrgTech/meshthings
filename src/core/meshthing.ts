@@ -1,7 +1,7 @@
 import { MeshDevice, Protobuf, Types } from "@meshtastic/core";
 import { TransportNodeSerial } from "@meshtastic/transport-node-serial";
 
-import { byteLength, MAX_TEXT_BYTES, paginate, parsePage, truncateBytes } from "./text.js";
+import { MAX_TEXT_BYTES, paginate, parsePage, truncateBytes } from "./text.js";
 import { UsageLog } from "./usage.js";
 
 const HEARTBEAT_INTERVAL_S = 5 * 60 * 1000; // 5 minutes
@@ -319,34 +319,6 @@ function createMeshThing(options: MeshThingOptions = {}) {
       const lines = mountedModules.map(({ name, description }) => truncateBytes(`${name}: ${description}`, 56));
 
       return paginate(lines, parsePage(args.slice(1)), "sys modules", maxTextBytes);
-    }
-
-    if (subcommand === "usage") {
-      if (!usage) {
-        return "Usage is not being recorded on this node.";
-      }
-
-      // Not parsePage: that defaults to 1, and a one day window is a strange
-      // thing to get for asking about usage
-      const requested = Number.parseInt(args[1] ?? "", 10);
-      const days = Math.min(Math.max(Number.isFinite(requested) ? requested : 30, 1), usage.retentionDays);
-      const report = usage.summary(days);
-      const head = `${days}d: ${report.total} cmds, ${report.clients} nodes`;
-
-      // Add commands while they fit rather than truncating mid-entry
-      let line = head;
-
-      for (const entry of report.commands) {
-        const next = `${line === head ? " | " : ", "}${entry.command} ${entry.count}`;
-
-        if (byteLength(line + next) > maxTextBytes) {
-          break;
-        }
-
-        line += next;
-      }
-
-      return line;
     }
 
     if (subcommand === "stats") {

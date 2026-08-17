@@ -41,7 +41,7 @@ The tradeoff is that it does not run on the radio. It runs on a computer next to
 | **directory** | `services`, `find`, `whois`, `register`, `unregister` | Nothing |
 | **alerts** | `subscribe`, `unsubscribe`, `status`, `alerts`, `receiver` | An SDR and a SAME decoder |
 
-Plus built-ins on every node: `ping`, `help`, and `sys` / `sys stats` / `sys modules` / `sys usage` for version, uptime, traffic counters, and what the node is actually used for.
+Plus built-ins on every node: `ping`, `help`, and `sys` / `sys stats` / `sys modules` for version, uptime, and traffic counters.
 
 ### weather
 
@@ -210,12 +210,23 @@ Tests live next to what they cover: core tests in `src/tst/`, and each thing's t
 Uptime tells you the node is alive. It does not tell you anyone wants it. Optional usage recording answers that:
 
 ```
-sys usage        ->  30d: 1204 cmds, 23 nodes | t 810, services 210, subscribe 96
-sys usage 7      ->  a week instead of a month
-GET /usage?days=90   the full per-command breakdown
+GET /usage            the last 30 days
+GET /usage?days=90    or as far back as retention allows
+```
+
+```json
+{
+  "retentionDays": 90, "days": 30, "total": 1204, "clients": 23,
+  "commands": [
+    { "module": "weather",   "command": "t",        "count": 810 },
+    { "module": "directory", "command": "services", "count": 210 }
+  ]
+}
 ```
 
 Per-command counts are the useful part: they tell you the directory is dead weight while `t` gets hammered, which is the thing that would actually change what you run. Aliases are counted separately, so you can also see whether anyone uses the long form.
+
+**This lives on the web page and not on the mesh.** `sys` reports version, uptime and the process's own counters to anyone who asks, which helps a user see the node is healthy. How many distinct people use the service, and what for, is operator business — publishing it to the channel would tell every passer-by things they have no reason to know.
 
 **It is off unless you configure it.** Add a `usage:` entry to your config to switch it on; leave it out and nothing is written down.
 

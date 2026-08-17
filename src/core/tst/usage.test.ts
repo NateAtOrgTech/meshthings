@@ -2,7 +2,6 @@ import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 
 import { commandsModule, createMeshThing } from "../meshthing.js";
-import { MAX_TEXT_BYTES } from "../text.js";
 import { createUsageLog, dayOf } from "../usage.js";
 import { openDatabase } from "../db.js";
 import { createMockDevice } from "../../testing/index.js";
@@ -199,72 +198,18 @@ describe("recording through a running node", () => {
 
     assert.equal(usage, undefined);
   });
-});
 
-describe("sys usage", () => {
-  async function node() {
-    const mock = createMockDevice();
-    const usage = createUsageLog({ database: openDatabase(":memory:") });
-    const thing = createMeshThing({ minSendIntervalMs: 0, usage });
-
-    await thing.listen(mock.device, [
-      commandsModule("weather", "weather", [{ commandStrings: "t", commandFunction: () => "18.5°C" }]),
-    ]);
-
-    async function ask(text: string, from = 0x1000) {
-      const before = mock.sent.length;
-
-      mock.receive(text, { from });
-      await mock.settle(15);
-
-      return mock.sent.slice(before)[0]?.text ?? "";
-    }
-
-    return { usage, ask };
-  }
-
-  test("reports totals, reach and the busiest commands", async () => {
+  test("does not answer usage questions over the mesh", async () => {
     const { ask } = await node();
 
-    await ask("t", 111);
-    await ask("t", 222);
+    // Usage is operator business and lives on the web page. Answering it here
+    // would publish reach and command counts to anyone who asked.
+    const reply = (await ask("sys usage"))[0] ?? "";
 
-    const reply = await ask("sys usage", 111);
-
-    assert.match(reply, /30d: \d+ cmds, \d+ nodes/);
-    assert.match(reply, /t \d+/);
-  });
-
-  test("fits a packet even with many commands recorded", async () => {
-    const { usage, ask } = await node();
-
-    for (let index = 0; index < 60; index++) {
-      usage.recordCommand(index, "weather", `command-number-${index}`);
-    }
-
-    assert.ok(Buffer.byteLength(await ask("sys usage"), "utf8") <= MAX_TEXT_BYTES);
-  });
-
-  test("takes a window in days", async () => {
-    const { ask } = await node();
-
-    assert.match(await ask("sys usage 7"), /^7d:/);
-  });
-
-  test("clamps a window beyond what is retained", async () => {
-    const { ask } = await node();
-
-    assert.match(await ask("sys usage 9999"), /^90d:/);
-  });
-
-  test("says so when nothing is being recorded", async () => {
-    const mock = createMockDevice();
-    const thing = createMeshThing({ minSendIntervalMs: 0 });
-
-    await thing.listen(mock.device, []);
-    mock.receive("sys usage");
-    await mock.settle(15);
-
-    assert.match(mock.sent[0].text, /not being recorded/);
+    // The in-memory counters sys already reports are fine -- they are about the
+    // process. What must not appear is reach, or a per-command breakdown.
+    assert.ok(!/\d+d: \d+ cmds, \d+ nodes/.test(reply), `sys answered a usage question: ${reply}`);
+    assert.ok(!/nodes/.test(reply), `sys leaked reach: ${reply}`);
+    assert.match(reply, /meshthings/, "sys itself should still work");
   });
 });
