@@ -17,6 +17,14 @@ function createExampleConfig(): MeshthingsConfig {
 
   return {
     device: process.env.SERIAL_DEVICE || "",
+
+    // How to reach the radio. Omitted means serial, which is what most nodes
+    // are. For a node on wifi, install @meshtastic/transport-http and supply:
+    //
+    //   connect: async (address) =>
+    //     new MeshDevice(await TransportHttp.create(address)),
+    //
+    // Nothing above this line is serial-specific; the transport is a choice.
     httpPort: Number(process.env.PORT) || undefined,
 
     // Keeps a record of what the node is used for, so you can tell whether a

@@ -237,3 +237,141 @@ describe("the health endpoint", () => {
     }
   });
 });
+
+// start() was previously unreachable from a test: it created a serial transport
+// itself, so nothing below it could run without a radio plugged in. The failure
+// path it grew during the review -- stop the meshthing when the stats page
+// cannot bind -- therefore shipped with no coverage at all.
+describe("starting a node", () => {
+  const stoppable = (name: string, stopped: string[]): MeshThingModule => ({
+    name,
+    description: name,
+    create: () => ({
+      commands: [{ commandStrings: "t", commandFunction: () => "18.5°C" }],
+      stop: () => void stopped.push(name),
+    }),
+  });
+
+  function radio() {
+    const mock = createMockDevice();
+
+    return { mock, connect: async () => mock.device };
+  }
+
+  test("brings the radio online and mounts the modules", async () => {
+    const { mock, connect } = radio();
+    const stopped: string[] = [];
+
+    const thing = await meshServer.start("/dev/imaginary", [stoppable("weather", stopped)], { connect });
+
+    try {
+      assert.equal(mock.configured, true, "the device was never configured");
+      assert.ok(mock.heartbeatInterval! > 0, "serial times out without a heartbeat");
+      assert.deepEqual(thing.getModules(), ["weather"]);
+
+      mock.receive("t");
+      assert.equal((await mock.waitForSends(1))[0].text, "18.5°C");
+    } finally {
+      await thing.stop();
+    }
+  });
+
+  test("reports the package version, so `sys` says what is deployed", async () => {
+    const { mock, connect } = radio();
+
+    const thing = await meshServer.start("/dev/imaginary", [], { connect });
+
+    try {
+      mock.receive("sys");
+
+      assert.match((await mock.waitForSends(1))[0].text, new RegExp(`meshthings ${version.replace(/\./g, "\\.")}`));
+    } finally {
+      await thing.stop();
+    }
+  });
+
+  test("serves the stats page when a port is given", async () => {
+    const { connect } = radio();
+
+    const thing = await meshServer.start("/dev/imaginary", [], { connect, httpPort: 0 });
+
+    try {
+      // Port 0 binds an arbitrary free port, so the node started and did not throw
+      assert.equal(thing.getHealth().ok, true);
+    } finally {
+      await thing.stop();
+    }
+  });
+
+  test("runs happily with no stats page at all", async () => {
+    const { mock, connect } = radio();
+
+    const thing = await meshServer.start("/dev/imaginary", [], { connect });
+
+    try {
+      assert.equal(mock.configured, true);
+    } finally {
+      await thing.stop();
+    }
+  });
+
+  test("fails startup, and stops what it started, when the port is taken", async () => {
+    const { connect } = radio();
+    const stopped: string[] = [];
+
+    const holder = createMeshThing({ minSendIntervalMs: 0 });
+    const holderDevice = createMockDevice();
+
+    await holder.listen(holderDevice.device, []);
+
+    const held = await createStatsServer(holder, 0);
+    const { port } = held.address() as { port: number };
+
+    try {
+      await assert.rejects(
+        () => meshServer.start("/dev/imaginary", [stoppable("alerts", stopped)], { connect, httpPort: port }),
+        /Could not start the stats page/,
+      );
+
+      // The radio was already up by then. Leaving the module running with no
+      // handle to stop it would orphan its socket and its child process.
+      assert.deepEqual(stopped, ["alerts"], "a started module was left running after a failed start");
+    } finally {
+      held.close();
+      await holder.stop();
+    }
+  });
+
+  test("names the port it could not bind", async () => {
+    const { connect } = radio();
+    const holder = createMeshThing({ minSendIntervalMs: 0 });
+    const holderDevice = createMockDevice();
+
+    await holder.listen(holderDevice.device, []);
+
+    const held = await createStatsServer(holder, 0);
+    const { port } = held.address() as { port: number };
+
+    try {
+      await assert.rejects(
+        () => meshServer.start("/dev/imaginary", [], { connect, httpPort: port }),
+        new RegExp(String(port)),
+      );
+    } finally {
+      held.close();
+      await holder.stop();
+    }
+  });
+
+  test("lets a connect failure surface rather than starting half a node", async () => {
+    await assert.rejects(
+      () =>
+        meshServer.start("/dev/imaginary", [], {
+          connect: async () => {
+            throw new Error("no such device");
+          },
+        }),
+      /no such device/,
+    );
+  });
+});

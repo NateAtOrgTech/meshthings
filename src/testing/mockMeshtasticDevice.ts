@@ -53,6 +53,8 @@ function createMockDevice(options: MockDeviceOptions = {}) {
   const nodeInfo = createEmitter<{ myNodeNum: number }>();
 
   let identified = false;
+  let configured = false;
+  let heartbeatInterval: number | undefined;
   let failNext: Error | undefined;
 
   const device = {
@@ -71,8 +73,12 @@ function createMockDevice(options: MockDeviceOptions = {}) {
         },
       },
     },
-    setHeartbeatInterval() {},
-    async configure() {},
+    setHeartbeatInterval(interval: number) {
+      heartbeatInterval = interval;
+    },
+    async configure() {
+      configured = true;
+    },
     async sendText(
       text: string,
       to: Types.Destination = "broadcast",
@@ -146,6 +152,16 @@ function createMockDevice(options: MockDeviceOptions = {}) {
 
     clear() {
       sent.length = 0;
+    },
+
+    // Whether the startup sequence actually ran against this device, so a test
+    // can tell "wired up" from "wired up and brought online"
+    get configured() {
+      return configured;
+    },
+
+    get heartbeatInterval() {
+      return heartbeatInterval;
     },
 
     nodeNum,

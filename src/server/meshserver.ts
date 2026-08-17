@@ -1,7 +1,7 @@
 import express, { Request, Response } from "express";
 import { createRequire } from "node:module";
 
-import { createMeshThing, MeshThing, MeshThingOptions, ModuleSpec, UsageLog } from "../core/index.js";
+import { Connect, createMeshThing, MeshThing, MeshThingOptions, ModuleSpec, UsageLog } from "../core/index.js";
 
 // Reported by the `sys` command, so an operator can tell what is deployed
 // ../../ from src/server and from dist/server alike -- both land on the
@@ -11,6 +11,9 @@ const { version } = createRequire(import.meta.url)("../../package.json");
 type StartOptions = MeshThingOptions & {
   // Omit to leave the stats page off
   httpPort?: number;
+  // How to reach the radio. Defaults to serial; supply another for a device
+  // over wifi, or a fake one in a test.
+  connect?: Connect;
 };
 
 // Resolves once the port is bound, rejects if it cannot be. Separated from
@@ -66,11 +69,11 @@ function createStatsServer(meshThing: MeshThing, httpPort: number, usage?: Usage
 }
 
 async function start(deviceString: string, modules: ModuleSpec[], options: StartOptions = {}) {
-  const { httpPort, ...meshThingOptions } = options;
+  const { httpPort, connect, ...meshThingOptions } = options;
 
   // Configure and run the meshtastic device
   const meshThing = createMeshThing({ version, ...meshThingOptions });
-  await meshThing.configureAndListen(deviceString, modules);
+  await meshThing.configureAndListen(deviceString, modules, connect);
 
   // Started after the radio, so a reachable port means the node is genuinely
   // up rather than merely running. That is what makes it worth monitoring --

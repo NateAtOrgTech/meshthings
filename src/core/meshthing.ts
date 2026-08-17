@@ -171,6 +171,15 @@ function commandsModule(name: string, description: string, commands: Command[]):
   return { name, description, create: () => ({ commands }) };
 }
 
+// How a device is obtained. Serial is the default because it is what most nodes
+// are, but nothing above this is serial-specific -- supply another and the same
+// core drives a radio over wifi, or a fake one in a test.
+type Connect = (deviceString: string) => Promise<MeshDevice>;
+
+async function connectSerial(deviceString: string) {
+  return new MeshDevice(await TransportNodeSerial.create(deviceString));
+}
+
 function normalizeSpec<Config>(spec: ModuleSpec<Config>) {
   return "module" in spec ? spec : { module: spec, config: undefined as Config | undefined };
 }
@@ -572,9 +581,8 @@ function createMeshThing(options: MeshThingOptions = {}) {
     return true;
   }
 
-  async function configureAndListen(deviceString: string, modules: ModuleSpec[]) {
-    const transport = await TransportNodeSerial.create(deviceString);
-    const device = new MeshDevice(transport);
+  async function configureAndListen(deviceString: string, modules: ModuleSpec[], connect: Connect = connectSerial) {
+    const device = await connect(deviceString);
 
     await listen(device, modules);
 
@@ -642,6 +650,7 @@ type MeshThing = ReturnType<typeof createMeshThing>;
 
 export type {
   Command,
+  Connect,
   CommandContext,
   CommandHandler,
   MeshThing,
@@ -655,4 +664,4 @@ export type {
   Stats,
 };
 
-export { createMeshThing, commandsModule };
+export { createMeshThing, commandsModule, connectSerial };
