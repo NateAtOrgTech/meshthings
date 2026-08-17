@@ -86,6 +86,29 @@ Handlers may be async. **Returning nothing means say nothing** — no packet goe
 
 A handler that throws is caught, logged, and counted; it does not take the process down and it sends no reply.
 
+### health()
+
+Optional, and most meshthings should not have one. If your thing can tell that it has stopped working — not that it is idle, but *broken* — say so, and it will be reported at `/health` and turn the endpoint 503:
+
+```ts
+health: () => {
+  if (!source) {
+    // Configured off is not unhealthy
+    return { ok: true, detail: "not monitoring: no decoder configured" };
+  }
+
+  return days > limit
+    ? { ok: false, detail: `no weekly test in ${days}d: the receive chain is broken` }
+    : { ok: true, detail: `last weekly test ${days}d ago` };
+},
+```
+
+Three rules worth following:
+
+- **Deliberately configured off is not unhealthy.** A permanent red light for a choice somebody made on purpose teaches them to ignore the light.
+- **Degraded is not broken.** The weather thing does not report health: a station that has gone quiet still leaves the node serving, and `t` says how old the reading is. Reserve `ok: false` for things somebody should get out of bed for.
+- **It is polled and synchronous.** A health check that has to go and ask something is doing too much to be one. If it throws it is reported as a fault rather than taking the endpoint down, but that is a backstop, not a licence.
+
 ### stop()
 
 Release anything `create()` acquired. It may be async, and **it must be safe to call twice** — a supervisor may stop twice, and an error handler may already have closed the thing.

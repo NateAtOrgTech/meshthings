@@ -134,6 +134,7 @@ const alertsModule: MeshThingModule<AlertsConfig> = {
     const findSeen = db.prepare("SELECT key FROM seen_alerts WHERE key = ? AND expires_at > ?");
     const pruneSeen = db.prepare("DELETE FROM seen_alerts WHERE expires_at <= ?");
 
+    const startedAt = now();
     const recent: SameMessage[] = [];
     // Every counter here is reported by `receiver`. A counter nothing reads is
     // bookkeeping that makes a module look observable when it is not.
@@ -264,8 +265,42 @@ const alertsModule: MeshThingModule<AlertsConfig> = {
       { commandStrings: ["receiver"], commandFunction: receiver },
     ];
 
+    // Days since the weekly test, or since we started if none has arrived. A
+    // node that has been up a fortnight without hearing one is broken whether
+    // or not it ever heard one.
+    function daysWithoutTest() {
+      return Math.floor((now() - (health.lastTestAt || startedAt)) / (24 * 60 * 60 * 1000));
+    }
+
     return {
       commands,
+
+      health: () => {
+        // Unconfigured is not unhealthy. An operator who deliberately runs
+        // without an SDR must not get a permanent red light, or they learn to
+        // ignore it -- the same reasoning that keeps the weekly test off the
+        // mesh.
+        if (!source) {
+          return { ok: true, detail: "not monitoring: no decoder configured" };
+        }
+
+        const days = daysWithoutTest();
+
+        if (days > testIntervalDays) {
+          return {
+            ok: false,
+            detail: health.lastTestAt
+              ? `no weekly test in ${days}d: the receive chain is broken`
+              : `no weekly test since starting ${days}d ago: the receive chain has never worked`,
+          };
+        }
+
+        return {
+          ok: true,
+          detail: health.lastTestAt ? `last weekly test ${days}d ago` : `started ${days}d ago, awaiting the weekly test`,
+        };
+      },
+
       stop: async () => {
         await source?.stop?.();
       },

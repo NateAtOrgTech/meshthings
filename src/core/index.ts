@@ -14,6 +14,7 @@ export type {
   MeshThingModule,
   MeshThingOptions,
   ModuleContext,
+  ModuleHealth,
   ModuleSpec,
   MountedModule,
   SendOptions,
