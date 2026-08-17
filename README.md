@@ -41,7 +41,7 @@ The tradeoff is that it does not run on the radio. It runs on a computer next to
 | **directory** | `services`, `find`, `whois`, `register`, `unregister` | Nothing |
 | **alerts** | `subscribe`, `unsubscribe`, `status`, `alerts`, `receiver` | An SDR and a SAME decoder |
 
-Plus built-ins on every node: `ping`, `help`, and `sys` / `sys stats` / `sys modules` for version, uptime, and traffic counters.
+Plus built-ins on every node: `ping`, `help`, and `sys` / `sys stats` / `sys modules` / `sys usage` for version, uptime, traffic counters, and what the node is actually used for.
 
 ### weather
 
@@ -204,6 +204,27 @@ npm test
 This is deliberately *not* a `Transport`-level mock. Mocking there means hand-building protobuf frames, which tests Meshtastic's plumbing rather than your commands.
 
 Tests live next to what they cover: core tests in `src/tst/`, and each thing's tests in its own `tst/` folder.
+
+## Knowing whether it is worth running
+
+Uptime tells you the node is alive. It does not tell you anyone wants it. Optional usage recording answers that:
+
+```
+sys usage        ->  30d: 1204 cmds, 23 nodes | t 810, services 210, subscribe 96
+sys usage 7      ->  a week instead of a month
+GET /usage?days=90   the full per-command breakdown
+```
+
+Per-command counts are the useful part: they tell you the directory is dead weight while `t` gets hammered, which is the thing that would actually change what you run. Aliases are counted separately, so you can also see whether anyone uses the long form.
+
+**It is off unless you configure it.** Add a `usage:` entry to your config to switch it on; leave it out and nothing is written down.
+
+Two deliberate limits on what it keeps:
+
+- **Unrecognised commands are counted, never stored.** An unrecognised command is just whatever somebody typed, which may be a message they meant for a person. The count is the useful part; the text is not ours to keep.
+- **Reach means storing node numbers**, of everyone who sends a command, not just people who opted into something. Retention (90 days by default) is what makes that proportionate. Hashing them would be theatre — the space is small enough to reverse in seconds, so it would look like a privacy measure while providing none.
+
+Days are UTC, so a day means the same thing wherever the node and the reader are.
 
 ## Deployment
 

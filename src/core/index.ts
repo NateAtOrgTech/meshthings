@@ -32,4 +32,8 @@ export type { Subscribers, Subscription, SubscriptionCommandOptions } from "./su
 
 export { createSubscribers, subscriptionCommands, unsubscribeEverywhere, MAX_FILTER_BYTES } from "./subscribers.js";
 
+export type { CommandUsage, UsageLog, UsageOptions, UsageSummary } from "./usage.js";
+
+export { createUsageLog, DEFAULT_RETENTION_DAYS } from "./usage.js";
+
 export type { MeshthingsConfig } from "./config.js";
