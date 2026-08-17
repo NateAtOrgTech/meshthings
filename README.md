@@ -109,7 +109,7 @@ Two layers. Machine-specific paths go in `.env`; which things run and how they b
 | --- | --- | --- |
 | `SERIAL_DEVICE` | *(required)* | Serial path of the Meshtastic node |
 | `PORT` | *(unset)* | Port for the local HTTP stats page. Unset leaves it off. |
-| `WEATHER_STATION_PORT` | `41234` | UDP port the Tempest broadcasts on |
+| `WEATHER_STATION_PORT` | `50222` | UDP port the Tempest hub broadcasts on |
 | `MESH_DB` | `mesh.db` | SQLite file for the directory and subscribers |
 | `TIME_ZONE` | `America/New_York` | IANA zone for rendering alert expiry times |
 | `SAME_DECODER_COMMAND` | *(unset)* | Decoder to spawn. **Unset means no alerts are received.** |
@@ -126,7 +126,7 @@ function createConfig(): MeshthingsConfig {
   return {
     device: process.env.SERIAL_DEVICE || "",
     modules: [
-      { module: weatherModule, config: { port: 41234 } },
+      { module: weatherModule, config: { port: 50222 } },
       { module: directoryModule, config: { database } },
       { module: alertsModule, config: { database, areaNames: { "023005": "Cumberland" } } },
     ],

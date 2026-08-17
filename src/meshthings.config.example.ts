@@ -51,7 +51,7 @@ function createExampleConfig(): MeshthingsConfig {
       {
         module: weatherModule,
         config: {
-          port: 41234,
+          port: 50222,
           // How old a reading may be before it is reported as stale
           staleAfterMs: 10 * 60 * 1000,
           // Only accept readings from the station itself. Leave unset at first;

@@ -4,7 +4,7 @@ import dgram from "dgram";
 
 import { createMeshThing, MeshThing } from "../../../core/index.js";
 import { createMockDevice } from "../../../testing/index.js";
-import { weatherModule, WeatherConfig } from "../index.js";
+import { DEFAULT_PORT, weatherModule, WeatherConfig } from "../index.js";
 
 // Ask the OS for a free port so parallel runs don't fight over a fixed one
 function freePort() {
@@ -66,6 +66,13 @@ async function setup(config: Partial<WeatherConfig> = {}) {
 }
 
 describe("weather module", () => {
+  test("defaults to the port the Tempest hub actually broadcasts on", () => {
+    // WeatherFlow's UDP reference: the hub broadcasts over port 50222. The old
+    // default of 41234 came from a stale comment, and a fresh install using it
+    // would have waited for a reading that was never coming.
+    assert.equal(DEFAULT_PORT, 50222);
+  });
+
   test("says so before the station has broadcast anything", async () => {
     const { ask } = await setup();
 

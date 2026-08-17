@@ -2,7 +2,9 @@ import dgram from "dgram";
 
 import { MeshThingModule } from "../../core/index.js";
 
-const DEFAULT_PORT = 41234;
+// WeatherFlow's own UDP reference: "The WeatherFlow Smart Weather Station's hub
+// broadcasts UDP messages over port 50222 on the local network."
+const DEFAULT_PORT = 50222;
 // A Tempest broadcasts every minute; well past that and we are reporting fiction
 const STALE_AFTER_MS = 10 * 60 * 1000;
 
@@ -131,4 +133,4 @@ const weatherModule: MeshThingModule<WeatherConfig> = {
 
 export type { WeatherConfig };
 
-export { weatherModule };
+export { weatherModule, DEFAULT_PORT };

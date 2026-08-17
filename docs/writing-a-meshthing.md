@@ -205,7 +205,7 @@ Add it to `src/meshthings.config.ts`, which is your file — upstream never edit
 import { tidesModule } from "./things/tides/index.js";
 
 modules: [
-  { module: weatherModule, config: { port: 41234 } },
+  { module: weatherModule, config: { port: 50222 } },
   { module: tidesModule, config: { station: "8418150" } },
 ],
 ```
