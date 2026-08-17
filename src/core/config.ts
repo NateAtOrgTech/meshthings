@@ -1,11 +1,15 @@
-import { MeshThingOptions, ModuleSpec } from "./meshthing.js";
+import { Connect, MeshThingOptions, ModuleSpec } from "./meshthing.js";
 import { UsageLog } from "./usage.js";
 
 // What a deployment declares. This type is upstream's; the file that fills it
 // in belongs to whoever is running the node -- see meshthings.config.ts.
 type MeshthingsConfig = {
-  // Serial path of the meshtastic node, e.g. /dev/ttyUSB0
+  // Serial path of the meshtastic node, e.g. /dev/ttyUSB0. Whatever `connect`
+  // needs to find the radio, if you supply one.
   device: string;
+  // How to reach the radio. Defaults to serial; supply another to drive a node
+  // over wifi with @meshtastic/transport-http.
+  connect?: Connect;
   // Port for the local HTTP stats page. Omit to disable it.
   httpPort?: number;
   // Which meshthings run, in mount order

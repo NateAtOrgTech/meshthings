@@ -10,6 +10,7 @@ export type {
   Command,
   CommandContext,
   CommandHandler,
+  Connect,
   MeshThing,
   MeshThingModule,
   MeshThingOptions,
@@ -21,7 +22,7 @@ export type {
   Stats,
 } from "./meshthing.js";
 
-export { createMeshThing, commandsModule } from "./meshthing.js";
+export { createMeshThing, commandsModule, connectSerial } from "./meshthing.js";
 
 export { byteLength, paginate, parsePage, truncateBytes, MAX_TEXT_BYTES } from "./text.js";
 

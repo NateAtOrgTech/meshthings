@@ -67,7 +67,7 @@ Two details worth knowing:
 ### Requirements
 
 - **Node 22.13 or newer.** SQLite is built in from here, with no flag and nothing to compile. Earlier 22.x may need `--experimental-sqlite`.
-- **A Meshtastic node on USB.** Serial today; the core accepts any transport, and `@meshtastic/transport-http` works over wifi.
+- **A Meshtastic node on USB.** Serial by default. Nothing in the core is serial-specific — supply `connect` in your config to drive a node over wifi with `@meshtastic/transport-http` instead.
 - Optional: a Tempest station on the same LAN, for the weather thing.
 - Optional: an RTL-SDR and a SAME decoder, for alerts.
 

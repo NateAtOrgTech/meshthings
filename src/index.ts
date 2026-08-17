@@ -9,7 +9,7 @@ import { meshServer } from "./server/meshserver.js";
 const config = createConfig();
 
 await meshServer
-  .start(config.device, config.modules, { ...config.options, httpPort: config.httpPort, usage: config.usage })
+  .start(config.device, config.modules, { ...config.options, httpPort: config.httpPort, usage: config.usage, connect: config.connect })
   .catch((error) => {
     console.error("Failed to start:", error);
     process.exit(1);
