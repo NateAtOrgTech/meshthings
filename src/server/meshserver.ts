@@ -1,7 +1,7 @@
 import express, { Request, Response } from "express";
 import { createRequire } from "node:module";
 
-import { createMeshThing, MeshThing, MeshThingOptions, ModuleSpec } from "../core/index.js";
+import { createMeshThing, MeshThing, MeshThingOptions, ModuleSpec, UsageLog } from "../core/index.js";
 
 // Reported by the `sys` command, so an operator can tell what is deployed
 // ../../ from src/server and from dist/server alike -- both land on the
@@ -15,12 +15,27 @@ type StartOptions = MeshThingOptions & {
 
 // Resolves once the port is bound, rejects if it cannot be. Separated from
 // start() so it can be tested without a radio attached.
-function createStatsServer(meshThing: MeshThing, httpPort: number) {
+function createStatsServer(meshThing: MeshThing, httpPort: number, usage?: UsageLog) {
   const app = express();
 
   app.get("/", (req: Request, res: Response) => {
     // Send relevant stats, and which meshthings are mounted
     res.json({ modules: meshThing.getModules(), ...meshThing.getStats() });
+  });
+
+  // Whether the node is worth running, as opposed to whether it is running.
+  // Absent entirely when nothing is being recorded, rather than reporting zeroes
+  // that read like "nobody used it".
+  app.get("/usage", (req: Request, res: Response) => {
+    if (!usage) {
+      res.status(404).json({ error: "usage is not being recorded on this node" });
+
+      return;
+    }
+
+    const days = Math.min(Math.max(Number(req.query.days) || 30, 1), usage.retentionDays);
+
+    res.json({ retentionDays: usage.retentionDays, ...usage.summary(days) });
   });
 
   return new Promise<ReturnType<typeof app.listen>>((resolve, reject) => {
@@ -54,7 +69,7 @@ async function start(deviceString: string, modules: ModuleSpec[], options: Start
   // an ambiguous health check is barely better than none.
   if (httpPort) {
     try {
-      await createStatsServer(meshThing, httpPort);
+      await createStatsServer(meshThing, httpPort, options.usage);
       console.log(`Stats page on port ${httpPort}`);
     } catch (error) {
       await meshThing.stop();

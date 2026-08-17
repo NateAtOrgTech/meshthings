@@ -7,7 +7,7 @@
 //
 // Copy the parts you want across.
 
-import { commandsModule, MeshthingsConfig, openDatabase } from "./core/index.js";
+import { commandsModule, createUsageLog, MeshthingsConfig, openDatabase } from "./core/index.js";
 import { alertsModule } from "./things/alerts/index.js";
 import { directoryModule } from "./things/directory/index.js";
 import { weatherModule } from "./things/weather/index.js";
@@ -18,6 +18,15 @@ function createExampleConfig(): MeshthingsConfig {
   return {
     device: process.env.SERIAL_DEVICE || "",
     httpPort: Number(process.env.PORT) || undefined,
+
+    // Keeps a record of what the node is used for, so you can tell whether a
+    // meshthing earns its keep. Omit it entirely and nothing is written down.
+    //
+    // Counting reach means storing the node numbers of everyone who sends a
+    // command -- not just people who opted into anything. Retention is the
+    // control that makes that proportionate; hashing the numbers would not,
+    // since the space is small enough to reverse in seconds.
+    usage: createUsageLog({ database, retentionDays: 90 }),
 
     // Core-wide behaviour. The defaults are sensible; these are the knobs.
     options: {

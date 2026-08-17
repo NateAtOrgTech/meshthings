@@ -1,7 +1,8 @@
 import { MeshDevice, Protobuf, Types } from "@meshtastic/core";
 import { TransportNodeSerial } from "@meshtastic/transport-node-serial";
 
-import { byteLength, MAX_TEXT_BYTES, paginate, parsePage, truncateBytes } from "./text.js";
+import { MAX_TEXT_BYTES, paginate, parsePage, truncateBytes } from "./text.js";
+import { UsageLog } from "./usage.js";
 
 const HEARTBEAT_INTERVAL_S = 5 * 60 * 1000; // 5 minutes
 
@@ -99,6 +100,9 @@ type MeshThingOptions = {
   unknownReplyCooldownMs?: number;
   // Reported by the `sys` command
   version?: string;
+  // Records what the node is used for, if a deployment wants that kept. Absent
+  // means nothing is written down.
+  usage?: UsageLog;
   // Drives the reported clock -- uptime and the last-seen timestamps -- and
   // nothing else. Transmit pacing deliberately stays on real time: airtime is
   // a physical constraint, and a fake clock cannot make a radio send faster,
@@ -178,6 +182,7 @@ function createMeshThing(options: MeshThingOptions = {}) {
   let stopped = false;
   let lastSentAt = 0;
   const version = options.version ?? "dev";
+  const usage = options.usage;
   const statsNow = options.statsClock ?? (() => Date.now());
   const startedAt = statsNow();
   let stats: Stats = {
@@ -474,6 +479,18 @@ function createMeshThing(options: MeshThingOptions = {}) {
 
     if (!handler) {
       return;
+    }
+
+    // Recorded before the cooldown check: someone asking is usage whether or
+    // not we answer them this time
+    if (usage) {
+      const owner = commandOwners.get(command.toLocaleLowerCase());
+
+      if (claimed && owner) {
+        usage.recordCommand(messagePacket.from, owner, command.toLocaleLowerCase());
+      } else {
+        usage.recordUnknown(messagePacket.from);
+      }
     }
 
     // Only the unknown-command reply is rate limited, and only per node. It is

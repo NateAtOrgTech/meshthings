@@ -205,6 +205,38 @@ This is deliberately *not* a `Transport`-level mock. Mocking there means hand-bu
 
 Tests live next to what they cover: core tests in `src/tst/`, and each thing's tests in its own `tst/` folder.
 
+## Knowing whether it is worth running
+
+Uptime tells you the node is alive. It does not tell you anyone wants it. Optional usage recording answers that:
+
+```
+GET /usage            the last 30 days
+GET /usage?days=90    or as far back as retention allows
+```
+
+```json
+{
+  "retentionDays": 90, "days": 30, "total": 1204, "clients": 23,
+  "commands": [
+    { "module": "weather",   "command": "t",        "count": 810 },
+    { "module": "directory", "command": "services", "count": 210 }
+  ]
+}
+```
+
+Per-command counts are the useful part: they tell you the directory is dead weight while `t` gets hammered, which is the thing that would actually change what you run. Aliases are counted separately, so you can also see whether anyone uses the long form.
+
+**This lives on the web page and not on the mesh.** `sys` reports version, uptime and the process's own counters to anyone who asks, which helps a user see the node is healthy. How many distinct people use the service, and what for, is operator business — publishing it to the channel would tell every passer-by things they have no reason to know.
+
+**It is off unless you configure it.** Add a `usage:` entry to your config to switch it on; leave it out and nothing is written down.
+
+Two deliberate limits on what it keeps:
+
+- **Unrecognised commands are counted, never stored.** An unrecognised command is just whatever somebody typed, which may be a message they meant for a person. The count is the useful part; the text is not ours to keep.
+- **Reach means storing node numbers**, of everyone who sends a command, not just people who opted into something. Retention (90 days by default) is what makes that proportionate. Hashing them would be theatre — the space is small enough to reverse in seconds, so it would look like a privacy measure while providing none.
+
+Days are UTC, so a day means the same thing wherever the node and the reader are.
+
 ## Deployment
 
 A gateway should survive reboots. A minimal systemd unit:
