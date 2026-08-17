@@ -50,10 +50,22 @@ type ModuleContext<Config = unknown> = {
   log: (message: string) => void;
 };
 
+// A module's own opinion of whether it is working. Optional: most modules have
+// nothing meaningful to say, and one that reports "fine" unconditionally is
+// worse than one that stays quiet.
+type ModuleHealth = {
+  ok: boolean;
+  // Why, in a few words -- read by whoever is woken up at 3am
+  detail: string;
+};
+
 type MountedModule = {
   commands: Command[];
   // Release sockets, child processes, database handles
   stop?: () => void | Promise<void>;
+  // Deliberately synchronous. This is polled, and a health check that needs to
+  // go and ask something is doing too much to be one.
+  health?: () => ModuleHealth;
 };
 
 // A deployable meshthing. Several mount onto one device, so a module owns its
@@ -602,7 +614,28 @@ function createMeshThing(options: MeshThingOptions = {}) {
     return mountedModules.map(({ name }) => name);
   }
 
-  return { configureAndListen, listen, send, sendMany, getStats, getModules, stop };
+  // Only modules with an opinion appear. A module that does not report health
+  // contributes nothing to the verdict rather than a reassuring "ok" it has not
+  // earned.
+  function getHealth() {
+    const modules = mountedModules
+      .filter(({ mounted }) => mounted.health)
+      .map(({ name, mounted }) => {
+        try {
+          const { ok, detail } = mounted.health!();
+
+          return { name, ok, detail };
+        } catch (error) {
+          // A health check that throws is itself a fault worth reporting, and
+          // must not take the endpoint down on its way out
+          return { name, ok: false, detail: `health check failed: ${error}` };
+        }
+      });
+
+    return { ok: modules.every((module) => module.ok), modules };
+  }
+
+  return { configureAndListen, listen, send, sendMany, getStats, getModules, getHealth, stop };
 }
 
 type MeshThing = ReturnType<typeof createMeshThing>;
@@ -615,6 +648,7 @@ export type {
   MeshThingModule,
   MeshThingOptions,
   ModuleContext,
+  ModuleHealth,
   ModuleSpec,
   MountedModule,
   SendOptions,

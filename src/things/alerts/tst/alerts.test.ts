@@ -485,6 +485,69 @@ describe("receiver health", () => {
   });
 });
 
+describe("reported health", () => {
+  test("is healthy, not broken, when no decoder is configured", async () => {
+    const fake = createMockDevice();
+    const thing = createMeshThing({ minSendIntervalMs: 0 });
+
+    await thing.listen(fake.device, [
+      { module: alertsModule, config: { database: openDatabase(":memory:"), now: () => NOW } },
+    ]);
+
+    const health = thing.getHealth();
+
+    // A permanent red light for a deliberate choice teaches people to ignore
+    // the light -- the same reason the weekly test never reaches the mesh
+    assert.equal(health.ok, true);
+    assert.match(health.modules[0].detail, /not monitoring/);
+  });
+
+  test("is healthy while waiting for the first weekly test", async () => {
+    const { thing, advance } = await setup({ testIntervalDays: 8 });
+
+    advance(2 * DAY);
+
+    const health = thing.getHealth();
+
+    assert.equal(health.ok, true);
+    assert.match(health.modules[0].detail, /awaiting the weekly test/);
+  });
+
+  test("goes unhealthy if the first weekly test never arrives", async () => {
+    const { thing, advance } = await setup({ testIntervalDays: 8 });
+
+    advance(12 * DAY);
+
+    const health = thing.getHealth();
+
+    assert.equal(health.ok, false);
+    assert.match(health.modules[0].detail, /never worked/);
+  });
+
+  test("is healthy once tests are arriving", async () => {
+    const { thing, decoder } = await setup({ testIntervalDays: 8 });
+
+    decoder.send(WEEKLY_TEST);
+
+    const health = thing.getHealth();
+
+    assert.equal(health.ok, true);
+    assert.match(health.modules[0].detail, /last weekly test 0d ago/);
+  });
+
+  test("goes unhealthy when the tests stop", async () => {
+    const { thing, decoder, advance } = await setup({ testIntervalDays: 8 });
+
+    decoder.send(WEEKLY_TEST);
+    advance(12 * DAY);
+
+    const health = thing.getHealth();
+
+    assert.equal(health.ok, false);
+    assert.match(health.modules[0].detail, /no weekly test in 12d/);
+  });
+});
+
 describe("commands", () => {
   test("reports no recent alerts before any arrive", async () => {
     const { ask } = await setup();

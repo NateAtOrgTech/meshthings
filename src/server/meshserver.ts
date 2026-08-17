@@ -23,6 +23,15 @@ function createStatsServer(meshThing: MeshThing, httpPort: number, usage?: Usage
     res.json({ modules: meshThing.getModules(), ...meshThing.getStats() });
   });
 
+  // Whether the node is working, as opposed to merely running. A monitor reads
+  // the status code: connection refused means the process is gone, 200 means
+  // nothing is complaining, 503 means it is up but something is wrong.
+  app.get("/health", (req: Request, res: Response) => {
+    const health = meshThing.getHealth();
+
+    res.status(health.ok ? 200 : 503).json(health);
+  });
+
   // Whether the node is worth running, as opposed to whether it is running.
   // Absent entirely when nothing is being recorded, rather than reporting zeroes
   // that read like "nobody used it".

@@ -205,6 +205,31 @@ This is deliberately *not* a `Transport`-level mock. Mocking there means hand-bu
 
 Tests live next to what they cover: core tests in `src/tst/`, and each thing's tests in its own `tst/` folder.
 
+## Knowing whether it is working
+
+`/health` is the endpoint to point a monitor at:
+
+```
+connection refused   the process is gone
+200                  up, and nothing is complaining
+503                  up, but a meshthing says something is wrong
+```
+
+```json
+{
+  "ok": false,
+  "modules": [
+    { "name": "alerts", "ok": false, "detail": "no weekly test in 12d: the receive chain is broken" }
+  ]
+}
+```
+
+Only meshthings with something meaningful to say report health; the rest contribute nothing rather than a reassuring "ok" they have not earned. The stats page at `/` keeps answering 200 whatever health says — it is a dashboard, not a probe.
+
+The one signal that earns a 503 today is the alerts receiver. NOAA transmits a required weekly test, so its absence means the SDR or decoder chain has stopped working, and silence from an alerting system is otherwise indistinguishable from "no emergencies".
+
+**Deliberately configured off is not unhealthy.** A node with no decoder reports `ok` with `not monitoring: no decoder configured`. A permanent red light for a choice you made on purpose teaches you to ignore the light — the same reason the weekly test never reaches the mesh.
+
 ## Knowing whether it is worth running
 
 Uptime tells you the node is alive. It does not tell you anyone wants it. Optional usage recording answers that:
